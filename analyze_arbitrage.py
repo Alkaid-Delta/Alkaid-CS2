@@ -376,10 +376,66 @@ def extract_skin_info(post_text: str) -> dict | None:
         data = json.loads(resp.choices[0].message.content)
         if data.get("market_hash_name") == "NONE":
             return None
+        
+        # 自動驗證皮膚名稱是否存在於 csgoskins.gg
+        mhn = data.get("market_hash_name", "")
+        if mhn and _verify_skin_on_csgoskins(mhn):
+            return data
+        
+        # 驗證失敗 → 重試一次
+        print(f"  [驗證] ⚠️ '{mhn}' 不存在,重新翻譯...")
+        retry_prompt = f"""CS2 皮膚名稱翻譯錯誤.請重新翻譯.
+
+原貼文: {post_text}
+上次給的: {mhn} ← 這不存在於 csgoskins.gg
+
+請重新給一個正確的英文 market_hash_name(含磨損).
+回答 JSON: {{"market_hash_name":"...","seller_price":0,"confidence":"medium"}}"""
+        try:
+            resp2 = client.chat.completions.create(
+                model=MODEL, messages=[{"role": "user", "content": retry_prompt}],
+                temperature=0.3, max_tokens=200,
+                response_format={"type": "json_object"},
+            )
+            data2 = json.loads(resp2.choices[0].message.content)
+            if data2.get("market_hash_name") and data2["market_hash_name"] != "NONE":
+                mhn2 = data2["market_hash_name"]
+                if _verify_skin_on_csgoskins(mhn2):
+                    data2["seller_price"] = data.get("seller_price", data2.get("seller_price", -1))
+                    print(f"  [驗證] ✅ 重試成功: {mhn2}")
+                    return data2
+                else:
+                    print(f"  [驗證] ❌ 重試仍失敗: {mhn2}")
+        except Exception:
+            pass
         return data
     except Exception as e:
         print(f"  [錯誤] DeepSeek 提取失敗:{e}")
         return None
+
+
+def _verify_skin_on_csgoskins(market_hash_name: str) -> bool:
+    """驗證皮膚名稱是否存在於 csgoskins.gg (自動校正翻譯錯誤)"""
+    import re, time
+    slug = market_hash_name.lower()
+    slug = slug.replace("'", "").replace("(", "").replace(")", "")
+    slug = slug.replace("★ ", "").replace(" | ", "-").replace(" ", "-")
+    slug = re.sub(r'-(fn|mw|ft|ww|bs)$', '', slug)
+    slug = re.sub(r'-(factory-new|minimal-wear|field-tested|well-worn|battle-scarred)$', '', slug)
+    slug = slug.strip('-')
+    
+    url = f"https://csgoskins.gg/items/{slug}"
+    try:
+        import urllib.request
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        resp = urllib.request.urlopen(req, timeout=8)
+        html = resp.read().decode('utf-8', errors='ignore')
+        # 確認不是 404
+        if "Page Not Found" not in html and "does not exist" not in html[:500]:
+            return True
+    except Exception:
+        pass
+    return False
 
 
 # ============================================================
