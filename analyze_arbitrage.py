@@ -343,10 +343,19 @@ def extract_skin_info(post_text: str) -> dict | None:
 - 手套類:★ Driver Gloves | King Snake (Field-Tested)
 - 刀類:★ Butterfly Knife | Fade (Factory New)
 - 槍類:AK-47 | Fire Serpent (Minimal Wear)
-- 注意「邁阿密」= 「★ Driver Gloves | King Snake」,不是步槍
-- 注意「夜行衣」一定是手套或刀皮膚
-- 注意「漸層/漸變」通常是 Fade
-- 「淬火」= Case Hardened
+- 手套=Gloves, 刀=Knife, 爪=Karambit/Knife, 蝴蝶=Butterfly Knife
+- 折刀=Flip Knife, 穿刺者=Stiletto, 系繩者=Talon, 求生=Survival
+- 邁阿密=King Snake(手套), 不是 Miami 相關的槍
+- 夜行衣=手套皮膚,不是衣服皮膚
+- 深紅之網=Crimson Web, 漸層/漸變=Fade
+- 淬火=Case Hardened, 自動化=Mecha Industries
+- 印花集=Printstream, 無上之焰=Wildfire
+- 多普勒=Doppler, 伽瑪多普勒=Gamma Doppler
+- 大理石=Fade/Marble Fade, 偽冰火=Fake Fire&Ice
+- 底=最低價, 同磨=同磨損區間
+- 久經=Field-Tested(FT), 嶄新=Factory New(FN)
+- 略磨=Minimal Wear(MW), 破損=Well-Worn(WW)
+- 戰痕=Battle-Scarred(BS)
 
 === 貼文內容 ===
 {post_text}
