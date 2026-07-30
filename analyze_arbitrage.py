@@ -357,7 +357,7 @@ def extract_skin_info(post_text: str) -> dict | None:
 2. seller_price:賣家開價(新台幣 TWD),無價格請回 -1
 3. confidence:信心程度(high / medium / low)
 
-只回傳 JSON:{{"market_hash_name":"...","seller_price":0,"confidence":"high"}}
+只回傳 JSON:{{"market_hash_name":"...","seller_price":0,"confidence":"high"}}"""
     try:
         resp = client.chat.completions.create(
             model=MODEL, messages=[{"role": "user", "content": prompt}],
@@ -377,7 +377,7 @@ def extract_skin_info(post_text: str) -> dict | None:
 # 本地資料庫查詢
 # ============================================================
 
-    def lookup_buff_price(market_hash_name: str) -> dict | None:
+def lookup_buff_price(market_hash_name: str) -> dict | None:
     if os.path.exists(DB_PATH):
         conn = sqlite3.connect(DB_PATH)
         try:
