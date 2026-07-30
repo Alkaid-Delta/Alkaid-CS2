@@ -234,50 +234,57 @@ def fetch_posts(max_scrolls=50, max_posts=15):
 
         print(f" {len(all_posts)} 篇")
 
-        # ── 對純圖片貼文補 Vision ──
-        # 只讀圖片中的中文文字，不翻譯，讓 analyze_arbitrage 處理翻譯
+        # ── 圖片優先：有圖就先讀圖，官方名稱比文字俗稱準確 ──
         for p in all_posts:
-            if p['images'] and len(p['text']) < 15:
-                img_url = p['images'][0]
-                try:
-                    import requests
-                    resp = requests.get(img_url, timeout=15)
-                    if resp.status_code == 200:
-                        try:
-                            import vision_analyzer as va
-                            # 確保有 OpenRouter Key
-                            if not os.environ.get("OPENROUTER_API_KEY"):
-                                os.environ["OPENROUTER_API_KEY"] = _get_cfg("OPENROUTER_API_KEY", "")
-                            result = va.analyze_image(
-                                resp.content,
-                                custom_prompt=(
-                                    "CS2 BUFF 交易截圖。\n"
-                                    "只有**打勾(✔)且有黃色邊框**的項目才是要賣的。\n"
-                                    "對每個打勾的項目輸出 JSON 陣列:\n"
-                                    '[{"chinese_name":"中文皮膚名含★",\n'
-                                    '  "wear":"磨損度中文",\n'
-                                    '  "price":價格數字,\n'
-                                    '  "currency":"TWD或RMB"}]\n'
-                                    "只輸出陣列，不打勾的忽略。"
-                                ),
-                                retry=1
-                            )
-                            if result and isinstance(result, dict):
-                                cn = result.get('chinese_name', '')
-                                wear = result.get('wear', '')
-                                price = result.get('price', 0)
-                                cur = result.get('currency', 'TWD')
-                                extra = f"【圖】{cn} {wear}"
-                                if price:
-                                    extra += f" {cur}{price}"
-                                p['text'] = f"[圖片] 售 {cn} {wear} {price}{cur}"
-                                print(f"  [FB] 🖼️ 圖片貼文: {cn} {wear} {price}{cur}")
-                        except ImportError:
-                            pass
-                        except Exception as e:
-                            print(f"  [FB] ⚠️ Vision 輔助失敗: {e}")
-                except Exception:
-                    pass
+            if not p['images']:
+                continue
+            try:
+                import requests as _req
+                import vision_analyzer as va
+                if not os.environ.get("OPENROUTER_API_KEY"):
+                    os.environ["OPENROUTER_API_KEY"] = _get_cfg("OPENROUTER_API_KEY", "")
+
+                for img_url in p['images'][:3]:  # 最多看 3 張
+                    resp = _req.get(img_url, timeout=15)
+                    if resp.status_code != 200:
+                        continue
+                    result = va.analyze_image(
+                        resp.content,
+                        custom_prompt=(
+                            "CS2交易截圖.判斷類型(庫存/詳情/Steam/遊戲內)."
+                            "提取要賣的物品,輸出JSON陣列:"
+                            '[{"name":"完整中文名含★","wear":"磨損度","price":數字,"currency":"TWD/RMB"}]'
+                            "庫存只取打勾的項目,單一物品頁就是那件.無法辨識回傳[]"
+                        ),
+                        retry=1
+                    )
+                    if result and isinstance(result, list) and len(result) > 0:
+                        items = result
+                    elif result and isinstance(result, dict):
+                        items = [result]
+                    else:
+                        continue
+
+                    vision_texts = []
+                    for item in items:
+                        cn = item.get('chinese_name', item.get('name', ''))
+                        wear = item.get('wear', '')
+                        price = item.get('price', 0)
+                        cur = item.get('currency', 'RMB')
+                        st = "StatTrak " if item.get('stattrak') else ""
+                        skin_text = f"{st}{cn} {wear}"
+                        if price:
+                            skin_text += f" {price}{cur}"
+                        vision_texts.append(skin_text)
+
+                    if vision_texts:
+                        p['text'] = "[圖片] 售 " + " + ".join(vision_texts)
+                        print(f"  [FB] 🖼️ 圖片優先: {p['text'][:100]}")
+                        break  # 成功讀到一張圖就夠了
+            except ImportError:
+                pass
+            except Exception as e:
+                print(f"  [FB] ⚠️ Vision 錯誤: {e}")
 
         browser.close()
 
