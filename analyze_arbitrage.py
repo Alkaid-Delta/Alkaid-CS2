@@ -345,8 +345,8 @@ def extract_skin_info(post_text: str) -> dict | None:
 - 槍類:AK-47 | Fire Serpent (Minimal Wear)
 - 手套=Gloves, 刀=Knife, 爪=Karambit/Knife, 蝴蝶=Butterfly Knife
 - 折刀=Flip Knife, 穿刺者=Stiletto, 系繩者=Talon, 求生=Survival
-- 邁阿密=King Snake(手套), 不是 Miami 相關的槍
-- 夜行衣=手套皮膚,不是衣服皮膚
+- 邁阿密=Sport Gloves | Vice(手套),不是King Snake也不是步槍
+- 夜行衣=Sport Gloves | Nocts(手套),不是Hand Wraps
 - 深紅之網=Crimson Web, 漸層/漸變=Fade
 - 淬火=Case Hardened, 自動化=Mecha Industries
 - 印花集=Printstream, 無上之焰=Wildfire
