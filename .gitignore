@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+
+# Config & secrets
+config.txt
+
+# State & cache
+analyzer_state.json
+deals_history.json
+*.jpg
+*.png
+
+# Test files
+_test_block.py
+analyze_arbitrage_backup.py
+
+# Git
+.git/
