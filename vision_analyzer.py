@@ -54,16 +54,17 @@ def analyze_image(image_bytes: bytes, retry: int = 2, custom_prompt: str | None 
     )
 
     user_prompt = custom_prompt if custom_prompt else (
-        "請分析這張 CS2 交易截圖，提取以下資訊（以 JSON 回傳）：\n"
-        "1. market_hash_name：皮膚的完整英文名稱（含磨損），例如 AK-47 | Fire Serpent (Field-Tested)\n"
-        "   如果無法辨識請回傳 \"UNKNOWN\"\n"
+        "請分析這張 CS2 BUFF 交易截圖。\n"
+        "注意：只有**打勾(✔)且有黃色邊框**的項目才是要賣的。\n"
+        "未選中的項目（灰色、無邊框）忽略。\n"
+        "對每個選中的項目提取以下資訊：\n"
+        "1. name：皮膚中文名稱（如 蝴蝶刀 | 狩獵網格，含★標記）\n"
         "2. wear：磨損度中文（崭新出厂 / 略有磨损 / 久经沙场 / 战痕累累 / 破损不堪）\n"
-        "3. seller_price：賣家開價（新台幣 TWD），無價格請回 -1\n"
-        "4. confidence：你對辨識結果的信心程度 high / medium / low\n"
-        "5. notes：圖片中其他有用的資訊（低浮點、印花、模板等），無則留空\n\n"
-        "只回傳 JSON：\n"
-        '{"market_hash_name":"...","wear":"...","seller_price":0,'
-        '"confidence":"high","notes":"..."}'
+        "3. price：價格數字\n"
+        "4. currency：TWD 或 RMB\n\n"
+        "回傳 JSON 陣列：\n"
+        '[{"name":"蝴蝶刀 (★) | 狩獵網格","wear":"久经沙场","price":3027,"currency":"RMB"}]\n'
+        "無選中項目回傳 []"
     )
 
     headers = {

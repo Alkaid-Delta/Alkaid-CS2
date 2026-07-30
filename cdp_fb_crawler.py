@@ -5,6 +5,17 @@ cdp_fb_crawler.py — GraphQL API 攔截方案
 import time, json, os, sys, subprocess
 from datetime import datetime
 
+def _get_cfg(key: str, default: str = "") -> str:
+    """從 config.txt 讀取設定"""
+    cfg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.txt")
+    if os.path.exists(cfg_path):
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith(f"{key}="):
+                    return line[len(key)+1:].strip()
+    return os.environ.get(key, default)
+
 def _ensure_chrome_debug():
     """確保 Chrome 執行在除錯模式（port 9222），若無則自動啟動"""
     import urllib.request
@@ -234,18 +245,22 @@ def fetch_posts(max_scrolls=50, max_posts=15):
                     if resp.status_code == 200:
                         try:
                             import vision_analyzer as va
+                            # 確保有 OpenRouter Key
+                            if not os.environ.get("OPENROUTER_API_KEY"):
+                                os.environ["OPENROUTER_API_KEY"] = _get_cfg("OPENROUTER_API_KEY", "")
                             result = va.analyze_image(
                                 resp.content,
                                 custom_prompt=(
-                                    "CS2交易截圖。這張圖是 BUFF/Steam 的皮膚截圖。\n"
-                                    "請讀取圖中的**中文**皮膚名稱和價格。\n"
-                                    "回傳 JSON:\n"
-                                    "{'chinese_name':'中文皮膚名不含磨損',\n"
-                                    " 'wear':'磨損度中文(崭新/略有磨损/久经/破损不堪/战痕累累)',\n"
-                                    " 'price':價格數字(無=0),\n"
-                                    " 'currency':'TWD'或'RMB'}"
+                                    "CS2 BUFF 交易截圖。\n"
+                                    "只有**打勾(✔)且有黃色邊框**的項目才是要賣的。\n"
+                                    "對每個打勾的項目輸出 JSON 陣列:\n"
+                                    '[{"chinese_name":"中文皮膚名含★",\n'
+                                    '  "wear":"磨損度中文",\n'
+                                    '  "price":價格數字,\n'
+                                    '  "currency":"TWD或RMB"}]\n'
+                                    "只輸出陣列，不打勾的忽略。"
                                 ),
-                                retry=0
+                                retry=1
                             )
                             if result and isinstance(result, dict):
                                 cn = result.get('chinese_name', '')
