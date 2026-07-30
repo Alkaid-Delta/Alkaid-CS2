@@ -333,6 +333,39 @@ def create_client():
 
 
 def extract_skin_info(post_text: str) -> dict | None:
+    # 先查對照表
+    import os, json as _json
+    dict_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "skin_dict.json")
+    if os.path.exists(dict_path):
+        try:
+            with open(dict_path, "r", encoding="utf-8") as f:
+                skin_dict = _json.load(f).get("pattern_cn_to_en", {})
+            # 比對貼文中是否包含對照表中的中文關鍵字
+            for cn, en in skin_dict.items():
+                if cn in post_text and len(cn) >= 2:
+                    print(f"  [字典] ✅ 查表命中: {cn} → {en}")
+                    # 判斷磨損度
+                    wear_en = "Field-Tested"  # 預設
+                    if any(w in post_text for w in ["崭新","嶄新","FN"]):
+                        wear_en = "Factory New"
+                    elif any(w in post_text for w in ["略有磨损","略有磨損","MW"]):
+                        wear_en = "Minimal Wear"
+                    elif any(w in post_text for w in ["久经","久經","FT"]):
+                        wear_en = "Field-Tested"
+                    elif any(w in post_text for w in ["破损不堪","破損不堪","WW"]):
+                        wear_en = "Well-Worn"
+                    elif any(w in post_text for w in ["战痕","戰痕","BS"]):
+                        wear_en = "Battle-Scarred"
+                    # 判斷價格
+                    import re
+                    price = -1
+                    m = re.search(r'(\d[\d,]*)\s*(?:NT|TWD|\$)?', post_text.replace(',',''))
+                    if m:
+                        price = int(m.group(1))
+                    return {"market_hash_name": en, "seller_price": price, "confidence": "high"}
+        except Exception:
+            pass
+
     client = create_client()
     if not client:
         return None
