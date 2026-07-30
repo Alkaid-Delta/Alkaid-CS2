@@ -207,14 +207,15 @@ def fetch_posts(max_scrolls=50, max_posts=15):
 
         print(f"  [FB] 滾動載入貼文...", end='', flush=True)
 
-        # 滾動載入更多
+        # 滾動載入更多 — 模擬人類隨機滾動
         all_posts = []
         seen_ids = set()
-        last_img_count = 0
+        import random as _rand
 
         for i in range(max_scrolls):
-            page.evaluate("window.scrollBy(0, 1200)")
-            time.sleep(2.5)
+            scroll_px = _rand.randint(500, 1200)
+            page.evaluate(f"window.scrollBy(0, {scroll_px})")
+            time.sleep(_rand.uniform(1.5, 3.5))
 
             # 解析本輪新收集到的 body
             new_posts = []
@@ -228,23 +229,37 @@ def fetch_posts(max_scrolls=50, max_posts=15):
 
             all_bodies.clear()
 
-            # 讀取 DOM 中新出現的圖片，按順序配對給新貼文
+            # 從 DOM 抓取圖片 — 利用 FB 的 alt text（內含 OCR 文字）
             if new_posts:
                 try:
-                    dom_imgs = page.evaluate('''(lastCount) => {
-                        const imgs = [];
+                    img_data = page.evaluate('''() => {
+                        const results = [];
                         document.querySelectorAll('img').forEach(img => {
                             const src = img.src || '';
-                            if (src.includes('fbcdn') && !src.includes('static') && img.width > 100) {
-                                imgs.push(src);
+                            const alt = (img.alt || '').trim();
+                            // fbcdn 大圖，且 alt 包含交易相關文字
+                            if (src.includes('fbcdn') && !src.includes('static') && img.width > 80) {
+                                if (alt && (alt.includes('BUFF') || alt.includes('BIJFF') || 
+                                    alt.includes('CS') || alt.includes('参考价') || 
+                                    alt.includes('皮肤') || alt.includes('飾品'))) {
+                                    results.push({src, alt, w: img.width, h: img.height});
+                                } else if (!alt) {
+                                    // 無 alt 的 fbcdn 大圖也記錄
+                                    results.push({src, alt: '', w: img.width, h: img.height});
+                                }
                             }
                         });
-                        return imgs.slice(lastCount);
-                    }''', last_img_count)
-                    last_img_count += len(dom_imgs)
+                        return results;
+                    }''')
+
+                    # 依序配對給新貼文
                     for idx, p in enumerate(new_posts):
-                        if idx < len(dom_imgs):
-                            p['images'] = [dom_imgs[idx]]
+                        if idx < len(img_data):
+                            data = img_data[idx]
+                            p['images'] = [data['src']]
+                            # 如果 alt 有交易資訊，直接當作貼文內容
+                            if data['alt']:
+                                p['alt_text'] = data['alt']
                 except Exception:
                     pass
 
@@ -261,6 +276,15 @@ def fetch_posts(max_scrolls=50, max_posts=15):
         for p in all_posts:
             if not p['images']:
                 continue
+
+            # 如果 FB 已 OCR 圖片 alt text，直接用它（不用 Vision，省成本）
+            alt_text = p.get('alt_text', '')
+            if alt_text:
+                p['text'] = f"[圖片] {alt_text[:200]}"
+                print(f"  [FB] 🖼️ 圖片 alt: {alt_text[:80]}")
+                continue
+
+            # 否則用 Vision 讀圖
             try:
                 import requests as _req
                 import vision_analyzer as va
