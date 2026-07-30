@@ -210,22 +210,45 @@ def fetch_posts(max_scrolls=50, max_posts=15):
         # 滾動載入更多
         all_posts = []
         seen_ids = set()
+        last_img_count = 0
 
         for i in range(max_scrolls):
             page.evaluate("window.scrollBy(0, 1200)")
-            time.sleep(2.5)  # 給 FB API 足夠時間回應
+            time.sleep(2.5)
 
-            # 解析目前已收集到的 body
+            # 解析本輪新收集到的 body
+            new_posts = []
             for body in all_bodies:
                 posts = _extract_posts_from_body(body)
                 for p in posts:
                     pid = p['id']
                     if pid and pid not in seen_ids:
                         seen_ids.add(pid)
-                        all_posts.append(p)
+                        new_posts.append(p)
 
-            # 清掉已處理的 body
             all_bodies.clear()
+
+            # 讀取 DOM 中新出現的圖片，按順序配對給新貼文
+            if new_posts:
+                try:
+                    dom_imgs = page.evaluate('''(lastCount) => {
+                        const imgs = [];
+                        document.querySelectorAll('img').forEach(img => {
+                            const src = img.src || '';
+                            if (src.includes('fbcdn') && !src.includes('static') && img.width > 100) {
+                                imgs.push(src);
+                            }
+                        });
+                        return imgs.slice(lastCount);
+                    }''', last_img_count)
+                    last_img_count += len(dom_imgs)
+                    for idx, p in enumerate(new_posts):
+                        if idx < len(dom_imgs):
+                            p['images'] = [dom_imgs[idx]]
+                except Exception:
+                    pass
+
+            all_posts.extend(new_posts)
             print('.', end='', flush=True)
 
             if len(all_posts) >= max_posts:
@@ -234,7 +257,7 @@ def fetch_posts(max_scrolls=50, max_posts=15):
 
         print(f" {len(all_posts)} 篇")
 
-        # ── 圖片優先：有圖就先讀圖，官方名稱比文字俗稱準確 ──
+        # ── 圖片優先：有圖就先讀圖 ──
         for p in all_posts:
             if not p['images']:
                 continue
