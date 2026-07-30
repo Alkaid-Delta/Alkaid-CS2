@@ -224,7 +224,7 @@ def fetch_posts(max_scrolls=50, max_posts=15):
         print(f" {len(all_posts)} 篇")
 
         # ── 對純圖片貼文補 Vision ──
-        # 如果貼文有圖片但文字很短，用 Vision 讀圖
+        # 只讀圖片中的中文文字，不翻譯，讓 analyze_arbitrage 處理翻譯
         for p in all_posts:
             if p['images'] and len(p['text']) < 15:
                 img_url = p['images'][0]
@@ -237,19 +237,26 @@ def fetch_posts(max_scrolls=50, max_posts=15):
                             result = va.analyze_image(
                                 resp.content,
                                 custom_prompt=(
-                                    "CS2交易圖片。請用JSON回傳："
-                                    "{skin:皮膚英文含磨損, price:價格數字, currency:TWD或RMB}"
-                                    "無價格或無法辨識則回傳null。"
+                                    "CS2交易截圖。這張圖是 BUFF/Steam 的皮膚截圖。\n"
+                                    "請讀取圖中的**中文**皮膚名稱和價格。\n"
+                                    "回傳 JSON:\n"
+                                    "{'chinese_name':'中文皮膚名不含磨損',\n"
+                                    " 'wear':'磨損度中文(崭新/略有磨损/久经/破损不堪/战痕累累)',\n"
+                                    " 'price':價格數字(無=0),\n"
+                                    " 'currency':'TWD'或'RMB'}"
                                 ),
                                 retry=0
                             )
                             if result and isinstance(result, dict):
-                                extra = f"【圖】{result.get('skin','')}"
-                                if result.get('price'):
-                                    cur = result.get('currency','TWD')
-                                    extra += f" {cur}{result['price']}"
-                                p['text'] = (p['text'] + ' ' + extra).strip()
-                                print(f"  [FB] 🖼️ 圖片貼文補解析: {extra[:80]}")
+                                cn = result.get('chinese_name', '')
+                                wear = result.get('wear', '')
+                                price = result.get('price', 0)
+                                cur = result.get('currency', 'TWD')
+                                extra = f"【圖】{cn} {wear}"
+                                if price:
+                                    extra += f" {cur}{price}"
+                                p['text'] = f"[圖片] 售 {cn} {wear} {price}{cur}"
+                                print(f"  [FB] 🖼️ 圖片貼文: {cn} {wear} {price}{cur}")
                         except ImportError:
                             pass
                         except Exception as e:
