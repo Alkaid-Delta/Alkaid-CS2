@@ -332,6 +332,40 @@ def create_client():
     return OpenAI(api_key=API_KEY, base_url=API_BASE)
 
 
+def _wear_to_en(text: str) -> str:
+    """磨損度中英對照 (Steam 官方翻譯, 注意簡繁相反陷阱)
+
+    官方對照:
+      Factory New    = 嶄新出廠(繁) / 崭新出厂(簡) / 厂新 / 全新
+      Minimal Wear   = 輕微磨損(繁) / 略有磨损(簡)
+      Field-Tested   = 久經沙場(繁) / 久经沙场(簡)
+      Well-Worn      = 戰痕累累(繁) / 破损不堪(簡)  ← 相反!
+      Battle-Scarred = 破損不堪(繁) / 战痕累累(簡)  ← 相反!
+    """
+    t = text
+    # 優先精確匹配
+    if any(w in t for w in ["崭新出厂", "嶄新出廠", "厂新", "全新", "崭新", "嶄新", "FN"]):
+        return "Factory New"
+    if any(w in t for w in ["略有磨损", "略有磨損", "輕微磨損", "轻微磨损", "MW"]):
+        return "Minimal Wear"
+    if any(w in t for w in ["久经沙场", "久經沙場", "久經沙場", "久经", "久經", "FT"]):
+        return "Field-Tested"
+    # 關鍵: 簡繁相反
+    if "战痕累累" in t:   # 簡體 = Battle-Scarred
+        return "Battle-Scarred"
+    if "破損不堪" in t:   # 繁體 = Battle-Scarred
+        return "Battle-Scarred"
+    if "破损不堪" in t:   # 簡體 = Well-Worn
+        return "Well-Worn"
+    if "戰痕累累" in t:   # 繁體 = Well-Worn
+        return "Well-Worn"
+    if any(w in t for w in ["戰痕", "战痕", "BS"]):
+        return "Battle-Scarred"
+    if any(w in t for w in ["破損", "破损", "WW"]):
+        return "Well-Worn"
+    return "Field-Tested"  # 預設
+
+
 def extract_skin_info(post_text: str) -> dict | None:
     # 先查對照表
     import os, json as _json
@@ -348,18 +382,8 @@ def extract_skin_info(post_text: str) -> dict | None:
             for cn_full, en_full in full_dict.items():
                 if cn_full in post_text:
                     print(f"  [字典] ✅ 完整名命中: {cn_full} → {en_full}")
-                    # 判斷磨損度
-                    wear_en = "Field-Tested"
-                    if any(w in post_text for w in ["崭新", "嶄新", "FN"]):
-                        wear_en = "Factory New"
-                    elif any(w in post_text for w in ["略有磨损", "略有磨損", "MW"]):
-                        wear_en = "Minimal Wear"
-                    elif any(w in post_text for w in ["久经", "久經", "FT"]):
-                        wear_en = "Field-Tested"
-                    elif any(w in post_text for w in ["破损不堪", "破損不堪", "WW"]):
-                        wear_en = "Well-Worn"
-                    elif any(w in post_text for w in ["战痕", "戰痕", "BS"]):
-                        wear_en = "Battle-Scarred"
+                    # 判斷磨損度 (簡繁相反陷阱已處理)
+                    wear_en = _wear_to_en(post_text)
                     # 暗金
                     is_st = "暗金" in post_text or "StatTrak" in post_text
                     full_name = en_full
@@ -399,18 +423,8 @@ def extract_skin_info(post_text: str) -> dict | None:
             for cn, en in skin_dict.items():
                 if cn in post_text and len(cn) >= 2:
                     print(f"  [字典] ✅ 查表命中: {cn} → {en}")
-                    # 判斷磨損度
-                    wear_en = "Field-Tested"  # 預設
-                    if any(w in post_text for w in ["崭新", "嶄新", "FN"]):
-                        wear_en = "Factory New"
-                    elif any(w in post_text for w in ["略有磨损", "略有磨損", "MW"]):
-                        wear_en = "Minimal Wear"
-                    elif any(w in post_text for w in ["久经", "久經", "FT"]):
-                        wear_en = "Field-Tested"
-                    elif any(w in post_text for w in ["破损不堪", "破損不堪", "WW"]):
-                        wear_en = "Well-Worn"
-                    elif any(w in post_text for w in ["战痕", "戰痕", "BS"]):
-                        wear_en = "Battle-Scarred"
+                    # 判斷磨損度 (簡繁相反陷阱已處理)
+                    wear_en = _wear_to_en(post_text)
 
                     # 判斷武器前綴（從貼文中找武器關鍵字）
                     weapon_en = ""
@@ -473,12 +487,10 @@ def extract_skin_info(post_text: str) -> dict | None:
 - 底=最低價, 同磨=同磨損區間
 - **同磨底=BUFF上同磨損區間的最低價**,貼文常寫「同磨底X*4.4」= BUFF最低價乘匯率
 - 如「同磨底 2100*4.4=9200」代表 BUFF 同磨損最低價 2100 RMB × 4.4 匯率 = 賣 9200 TWD
-- **底4.3/底4.4=和同磨底同意思**,「底4.4」= BUFF同磨損最低價×4.4匯率
+- 底4.3/底4.4=和同磨底同意思,「底4.4」= BUFF同磨損最低價×4.4匯率
 - **去尾/抹零=無條件向下取整**,如 9246 去尾算 9200
 - **CD貨=冷卻中的物品**,買了要等CD結束才能交易,通常較便宜但有風險
-- 久經=Field-Tested(FT), 嶄新=Factory New(FN)
-- 略磨=Minimal Wear(MW), 破損=Well-Worn(WW)
-- 戰痕=Battle-Scarred(BS)
+- **磨損度官方對照(簡繁相反陷阱!)**: Factory New=嶄新出廠/崭新出厂/厂新/全新, Minimal Wear=輕微磨損/略有磨损, Field-Tested=久經沙場/久经沙场, **Well-Worn=戰痕累累(繁)/破损不堪(簡)**, **Battle-Scarred=破損不堪(繁)/战痕累累(簡)**
 - **手套和刀類名稱前面必須加 ★**(如 ★ Sport Gloves | Vice),槍類不加
 - **暗金(StatTrak™)辨識**:名稱前有 StatTrak™ 或貼文提到「暗金」= 暗金武器
 - 暗金名稱格式: StatTrak™ AK-47 | Redline (Field-Tested) / ★ StatTrak™ Butterfly Knife | Fade (Factory New)

@@ -155,14 +155,24 @@ class HermesVisionProcessor:
         import csgoskins_bridge as cb
         loop = asyncio.get_event_loop()
 
-        # 組出完整名稱
-        wear_en = {
-            "崭新": "Factory New", "嶄新": "Factory New",
-            "略有磨损": "Minimal Wear", "略有磨損": "Minimal Wear",
-            "久经": "Field-Tested", "久經": "Field-Tested",
-            "破损": "Well-Worn", "破損": "Well-Worn",
-            "战痕": "Battle-Scarred", "戰痕": "Battle-Scarred",
-        }.get(wear, "Field-Tested")
+        # 組出完整名稱 (簡繁相反陷阱: 戰痕累累繁=WW簡=BS, 破損不堪繁=BS簡=WW)
+        wear_en = ""
+        if any(w in wear for w in ["崭新出厂", "嶄新出廠", "厂新", "全新", "FN"]):
+            wear_en = "Factory New"
+        elif any(w in wear for w in ["略有磨损", "略有磨損", "輕微磨損", "MW"]):
+            wear_en = "Minimal Wear"
+        elif any(w in wear for w in ["久经沙场", "久經沙場", "久经", "久經", "FT"]):
+            wear_en = "Field-Tested"
+        elif "战痕累累" in wear or "破損不堪" in wear:  # 簡體战痕累累=BS, 繁體破損不堪=BS
+            wear_en = "Battle-Scarred"
+        elif "破损不堪" in wear or "戰痕累累" in wear:  # 簡體破损不堪=WW, 繁體戰痕累累=WW
+            wear_en = "Well-Worn"
+        elif "战痕" in wear or "戰痕" in wear or "BS" in wear:
+            wear_en = "Battle-Scarred"
+        elif "破損" in wear or "破损" in wear or "WW" in wear:
+            wear_en = "Well-Worn"
+        else:
+            wear_en = "Field-Tested"
         full_name = f"{name} ({wear_en})"
 
         def sync_call():
