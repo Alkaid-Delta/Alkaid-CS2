@@ -835,6 +835,9 @@ def process_posts(posts: list[dict]) -> list[dict]:
             processed_ids.append(post.get("id", ""))
             continue
         mh, sp, conf = info.get("market_hash_name", ""), info.get("seller_price", -1), info.get("confidence", "low")
+        # 圖片來源的 RMB 價格 → 轉成 TWD（×4.5）
+        if sp > 0 and post.get("currency") == "RMB":
+            sp = round(sp * 4.5)
         if sp <= 0:
             print("  [1/3] ⚠️ 無價格,跳過")
             processed_ids.append(post.get("id", ""))

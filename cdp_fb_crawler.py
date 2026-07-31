@@ -403,13 +403,17 @@ def fetch_posts(max_scrolls=50, max_posts=15):
             # 多物品：每件獨立成一筆，共用作者/連結
             for j, item in enumerate(items):
                 skin_text = f"[圖片] 售 {item['name']} {item['wear']}"
-                if item.get('price'):
-                    skin_text += f" {item['price']}{item['currency']}"
+                price = item.get('price')
+                cur = item.get('currency', 'RMB')
+                if price:
+                    # 圖上 RMB 價格 → 標記讓下游轉 TWD
+                    skin_text += f" {price}{cur}"
                 results.append({
                     "id": f"p{i}_item{j}",
                     "author": p['author'],
                     "content": skin_text,
                     "link": p['url'] or "https://www.facebook.com/groups/allinunderdog",
+                    "currency": cur,  # 標記貨幣，analyze_arbitrage 會轉換
                 })
         else:
             results.append({
