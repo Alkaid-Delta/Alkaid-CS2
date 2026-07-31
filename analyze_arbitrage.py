@@ -410,13 +410,18 @@ def extract_skin_info(post_text: str) -> dict | None:
             # 武器中英對照（保留武器前綴用）
             weapon_map = {
                 "AK-47": "AK-47", "ak": "AK-47", "阿卡": "AK-47",
-                "M4A1-S": "M4A1-S", "M4A4": "M4A4", "沙鹰": "Desert Eagle",
-                "蝴蝶刀": "Butterfly Knife", "爪子刀": "Karambit",
+                "M4A1-S": "M4A1-S", "M4A4": "M4A4", "沙鹰": "Desert Eagle", "沙鷹": "Desert Eagle",
+                "蝴蝶刀": "Butterfly Knife", "爪子刀": "Karambit", "爪刀": "Karambit",
                 "刺刀": "Bayonet", "折刀": "Flip Knife", "锯齿爪刀": "Huntsman Knife",
-                "穿肠刀": "Gut Knife", "猎刀": "Huntsman Knife",
-                "运动手套": "Sport Gloves", "专业手套": "Specialist Gloves",
-                "驾驶手套": "Driver Gloves", "摩托手套": "Moto Gloves",
-                "手部束带": "Hand Wraps", "血猎手套": "Bloodhound Gloves",
+                "锯齿爪刀": "Huntsman Knife", "穿肠刀": "Gut Knife", "猎刀": "Huntsman Knife",
+                "猎杀者": "Huntsman Knife", "系绳者": "Talon Knife", "穿刺者": "Stiletto Knife",
+                "求生匕首": "Survival Knife", "流浪者": "Nomad Knife", "骷髅匕首": "Skeleton Knife",
+                "运动手套": "Sport Gloves", "运动手套": "Sport Gloves", "專業手套": "Specialist Gloves",
+                "专业手套": "Specialist Gloves", "驾驶手套": "Driver Gloves", "駕駛手套": "Driver Gloves",
+                "摩托手套": "Moto Gloves", "手部束带": "Hand Wraps", "手部束帶": "Hand Wraps",
+                "血猎手套": "Bloodhound Gloves", "血獵手套": "Bloodhound Gloves",
+                "运动手套": "Sport Gloves", "裹手": "Hand Wraps",
+                "沙漠之鹰": "Desert Eagle", "沙鹰": "Desert Eagle", "沙鷹": "Desert Eagle",
             }
 
             # 比對貼文中是否包含對照表中的中文關鍵字
@@ -449,18 +454,24 @@ def extract_skin_info(post_text: str) -> dict | None:
                         full_name = f"{prefix}{en} ({wear_en})"
                     print(f"  [字典] 🛠️ 組裝: {full_name}")
 
-                    # 判斷價格 — 優先抓「=」後面的結果(如 同磨底2100*4.4=9200 → 9200)
+                    # 判斷價格 — 優先抓「算」後的最終價(如 =5412算5000 → 5000)
                     import re
                     price = -1
                     text_clean = post_text.replace(',', '')
-                    m_eq = re.search(r'=\s*(\d[\d,]*)\s*(?:NT|TWD)?', text_clean)
-                    if m_eq:
-                        price = int(m_eq.group(1))
+                    # 「算5000」「算你5000」「去尾算5000」→ 5000
+                    m_suan = re.search(r'算(?:你|給|到)?\s*(\d[\d,]*)', text_clean)
+                    if m_suan:
+                        price = int(m_suan.group(1))
                     else:
-                        # 沒有「=」→ 抓最像賣價的數字
-                        candidates = re.findall(r'(?<![\d.])(\d{3,})(?:NT|TWD|\$)?', text_clean)
-                        if candidates:
-                            price = int(candidates[-1])
+                        # 其次「=」後面的結果(如 同磨底2100*4.4=9200 → 9200)
+                        m_eq = re.search(r'=\s*(\d[\d,]*)\s*(?:NT|TWD)?', text_clean)
+                        if m_eq:
+                            price = int(m_eq.group(1))
+                        else:
+                            # 最後抓最像賣價的數字
+                            candidates = re.findall(r'(?<![\d.])(\d{3,})(?:NT|TWD|\$)?', text_clean)
+                            if candidates:
+                                price = int(candidates[-1])
                     return {"market_hash_name": full_name, "seller_price": price, "confidence": "high"}
         except Exception:
             pass
