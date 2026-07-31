@@ -229,37 +229,65 @@ def fetch_posts(max_scrolls=50, max_posts=15):
 
             all_bodies.clear()
 
-            # 從 DOM 抓取圖片 — 利用 FB 的 alt text（內含 OCR 文字）
+            # 從 DOM 的 feed 容器抓取貼文+圖片（精準綁定，不錯配）
             if new_posts:
                 try:
-                    img_data = page.evaluate('''() => {
+                    dom_posts = page.evaluate('''() => {
                         const results = [];
-                        document.querySelectorAll('img').forEach(img => {
-                            const src = img.src || '';
-                            const alt = (img.alt || '').trim();
-                            // fbcdn 大圖，且 alt 包含交易相關文字
-                            if (src.includes('fbcdn') && !src.includes('static') && img.width > 80) {
-                                if (alt && (alt.includes('BUFF') || alt.includes('BIJFF') || 
-                                    alt.includes('CS') || alt.includes('参考价') || 
-                                    alt.includes('皮肤') || alt.includes('飾品'))) {
-                                    results.push({src, alt, w: img.width, h: img.height});
-                                } else if (!alt) {
-                                    // 無 alt 的 fbcdn 大圖也記錄
-                                    results.push({src, alt: '', w: img.width, h: img.height});
-                                }
+                        // 貼文容器：feed 的直接子層
+                        const feed = document.querySelector('div[role="feed"]');
+                        const containers = feed ? feed.children : [];
+                        
+                        for (const container of containers) {
+                            // 文字節點
+                            let text = '';
+                            const msgNode = container.querySelector('div[data-ad-comet-preview="message"]');
+                            if (msgNode) {
+                                text = (msgNode.textContent || '').trim();
                             }
-                        });
+                            if (!text) {
+                                const dirNode = container.querySelector('div[dir="auto"]');
+                                if (dirNode) text = (dirNode.textContent || '').trim();
+                            }
+                            
+                            // 圖片節點（優先 srcset 高清，其次 src）
+                            const imgs = [];
+                            container.querySelectorAll('img[src*="fbcdn"], img[src*="scontent"], a[href*="photo"] img').forEach(img => {
+                                let src = '';
+                                if (img.srcset) {
+                                    src = img.srcset.split(' ')[0];  // 最高解析度
+                                } else {
+                                    src = img.src || '';
+                                }
+                                if (src && !src.startsWith('data:') && !src.includes('static') 
+                                    && !imgs.includes(src) && img.width > 50) {
+                                    imgs.push(src);
+                                }
+                            });
+                            
+                            if (text || imgs.length > 0) {
+                                results.push({text: text.substring(0, 200), images: imgs});
+                            }
+                        }
                         return results;
                     }''')
 
-                    # 依序配對給新貼文
-                    for idx, p in enumerate(new_posts):
-                        if idx < len(img_data):
-                            data = img_data[idx]
-                            p['images'] = [data['src']]
-                            # 如果 alt 有交易資訊，直接當作貼文內容
-                            if data['alt']:
-                                p['alt_text'] = data['alt']
+                    # 用文字比對方式配對 DOM 貼文到 API 貼文
+                    for p in new_posts:
+                        api_text = (p.get('text') or '')[:40].strip()
+                        if not api_text:
+                            continue
+                        for dp in dom_posts:
+                            dom_text = (dp.get('text') or '')[:40].strip()
+                            # 文字有重疊就配對
+                            if dom_text and api_text and (
+                                dom_text[:15] in api_text or api_text[:15] in dom_text
+                            ):
+                                if dp.get('images'):
+                                    p['images'] = dp['images'][:3]
+                                if dp.get('text') and len(dp['text']) > len(p.get('text','')):
+                                    p['alt_text'] = dp['text']
+                                break
                 except Exception:
                     pass
 

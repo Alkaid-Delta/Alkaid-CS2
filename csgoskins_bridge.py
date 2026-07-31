@@ -42,6 +42,12 @@ def _set_cache(name, data):
     _save_cache()
 
 
+def _log(msg):
+    """日誌輸出到 stderr，避免污染 stdout (subprocess 解析用)"""
+    import sys
+    print(msg, file=sys.stderr)
+
+
 def fetch_buff_price(skin_name: str) -> dict | None:
     """查詢 BUFF 價格：openskin.dev API → csgoskins.gg 備用
 
@@ -93,15 +99,15 @@ def _try_openskin(skin_name: str, target_wear: str) -> dict | None:
         rmb = float(ask)
         twd = rmb * 4.5
         result = {"price_twd": round(twd, 2), "price_rmb": rmb, "wear": target_wear}
-        print(f"  [openskin] ✅ {skin_name} → ¥{rmb:,.2f} → NT${twd:,.0f}")
+        _log(f"  [openskin] ✅ {skin_name} → ¥{rmb:,.2f} → NT${twd:,.0f}")
         return result
     except urllib.error.HTTPError as e:
         if e.code == 404:
-            print(f"  [openskin] ⚠️ 查無此皮膚: {skin_name[:50]}")
+            _log(f"  [openskin] ⚠️ 查無此皮膚: {skin_name[:50]}")
         else:
-            print(f"  [openskin] ⚠️ HTTP {e.code}")
+            _log(f"  [openskin] ⚠️ HTTP {e.code}")
     except Exception as e:
-        print(f"  [openskin] ⚠️ {str(e)[:60]}")
+        _log(f"  [openskin] ⚠️ {str(e)[:60]}")
     return None
 
 

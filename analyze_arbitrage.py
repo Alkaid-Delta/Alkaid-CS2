@@ -389,6 +389,7 @@ def extract_skin_info(post_text: str) -> dict | None:
 - 久經=Field-Tested(FT), 嶄新=Factory New(FN)
 - 略磨=Minimal Wear(MW), 破損=Well-Worn(WW)
 - 戰痕=Battle-Scarred(BS)
+- **手套和刀類名稱前面必須加 ★**(如 ★ Sport Gloves | Vice),槍類不加
 
 === 貼文內容 ===
 {post_text}
@@ -397,6 +398,7 @@ def extract_skin_info(post_text: str) -> dict | None:
 1. market_hash_name:CS2 皮膚完整英文名稱(含磨損),如 "★ Driver Gloves | King Snake (Field-Tested)"
    如果不是 CS2 皮膚買賣請回傳 "NONE".
 2. seller_price:賣家開價(新台幣 TWD),無價格請回 -1
+   **如果貼文價格是人民幣(RMB/¥),請自動乘 4.5 轉成 TWD**
 3. confidence:信心程度(high / medium / low)
 
 只回傳 JSON:{{"market_hash_name":"...","seller_price":0,"confidence":"high"}}"""
