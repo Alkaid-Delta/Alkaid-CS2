@@ -348,24 +348,9 @@ def fetch_posts(max_scrolls=50, max_posts=15):
 
                     # ── Step 2: 依類型分流 ──
                     if img_type == 'inventory':
-                        # 庫存列表 → 切格子，只取打勾的格子（避免 Vision 幻覺）
-                        import vision_pipeline as vp
-                        grid_results = vp.run_pipeline_sync(
-                            resp.content, rows=max(rows,2), cols=max(cols,2),
-                            max_concurrent=3, threshold=0.7
-                        )
-                        checked = [r for r in grid_results
-                                   if r.get('is_checked') and r.get('success')
-                                   and r.get('name')]
-                        for r in checked:
-                            p['items'].append({
-                                "name": r.get('name', ''),
-                                "wear": r.get('wear', ''),
-                                "price": r.get('price', 0),
-                                "currency": r.get('currency', 'RMB'),
-                            })
-                        if checked:
-                            print(f"  [FB] 🖼️ 庫存圖: {len(checked)}/{len(grid_results)} 格打勾")
+                        # 庫存列表 → 無法可靠辨識(手繪勾/多物品)，直接跳過（規則:不勉強）
+                        print(f"  [FB] 🖼️ 庫存列表圖,跳過(無法可靠辨識)")
+                        continue
                     else:
                         # 單一物品頁 → 整圖讀取
                         result = va.analyze_image(
