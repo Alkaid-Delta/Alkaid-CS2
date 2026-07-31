@@ -395,6 +395,9 @@ def extract_skin_info(post_text: str) -> dict | None:
 - 底=最低價, 同磨=同磨損區間
 - **同磨底=BUFF上同磨損區間的最低價**,貼文常寫「同磨底X*4.4」= BUFF最低價乘匯率
 - 如「同磨底 2100*4.4=9200」代表 BUFF 同磨損最低價 2100 RMB × 4.4 匯率 = 賣 9200 TWD
+- **底4.3/底4.4=和同磨底同意思**,「底4.4」= BUFF同磨損最低價×4.4匯率
+- **去尾/抹零=無條件向下取整**,如 9246 去尾算 9200
+- **CD貨=冷卻中的物品**,買了要等CD結束才能交易,通常較便宜但有風險
 - 久經=Field-Tested(FT), 嶄新=Factory New(FN)
 - 略磨=Minimal Wear(MW), 破損=Well-Worn(WW)
 - 戰痕=Battle-Scarred(BS)
