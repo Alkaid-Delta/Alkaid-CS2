@@ -340,22 +340,59 @@ def extract_skin_info(post_text: str) -> dict | None:
         try:
             with open(dict_path, "r", encoding="utf-8") as f:
                 skin_dict = _json.load(f).get("pattern_cn_to_en", {})
+
+            # 武器中英對照（保留武器前綴用）
+            weapon_map = {
+                "AK-47": "AK-47", "ak": "AK-47", "阿卡": "AK-47",
+                "M4A1-S": "M4A1-S", "M4A4": "M4A4", "沙鹰": "Desert Eagle",
+                "蝴蝶刀": "Butterfly Knife", "爪子刀": "Karambit",
+                "刺刀": "Bayonet", "折刀": "Flip Knife", "锯齿爪刀": "Huntsman Knife",
+                "穿肠刀": "Gut Knife", "猎刀": "Huntsman Knife",
+                "运动手套": "Sport Gloves", "专业手套": "Specialist Gloves",
+                "驾驶手套": "Driver Gloves", "摩托手套": "Moto Gloves",
+                "手部束带": "Hand Wraps", "血猎手套": "Bloodhound Gloves",
+            }
+
             # 比對貼文中是否包含對照表中的中文關鍵字
             for cn, en in skin_dict.items():
                 if cn in post_text and len(cn) >= 2:
                     print(f"  [字典] ✅ 查表命中: {cn} → {en}")
                     # 判斷磨損度
                     wear_en = "Field-Tested"  # 預設
-                    if any(w in post_text for w in ["崭新","嶄新","FN"]):
+                    if any(w in post_text for w in ["崭新", "嶄新", "FN"]):
                         wear_en = "Factory New"
-                    elif any(w in post_text for w in ["略有磨损","略有磨損","MW"]):
+                    elif any(w in post_text for w in ["略有磨损", "略有磨損", "MW"]):
                         wear_en = "Minimal Wear"
-                    elif any(w in post_text for w in ["久经","久經","FT"]):
+                    elif any(w in post_text for w in ["久经", "久經", "FT"]):
                         wear_en = "Field-Tested"
-                    elif any(w in post_text for w in ["破损不堪","破損不堪","WW"]):
+                    elif any(w in post_text for w in ["破损不堪", "破損不堪", "WW"]):
                         wear_en = "Well-Worn"
-                    elif any(w in post_text for w in ["战痕","戰痕","BS"]):
+                    elif any(w in post_text for w in ["战痕", "戰痕", "BS"]):
                         wear_en = "Battle-Scarred"
+
+                    # 判斷武器前綴（從貼文中找武器關鍵字）
+                    weapon_en = ""
+                    for cn_w, en_w in weapon_map.items():
+                        if cn_w in post_text:
+                            weapon_en = en_w
+                            break
+                    # 暗金判斷
+                    is_stattrak = "暗金" in post_text or "StatTrak" in post_text
+
+                    # 組裝完整名稱: [★] [StatTrak™] 武器 | 花紋 (磨損)
+                    prefix = ""
+                    if weapon_en in ("Butterfly Knife", "Karambit", "Bayonet", "Flip Knife",
+                                     "Huntsman Knife", "Gut Knife", "Sport Gloves", "Specialist Gloves",
+                                     "Driver Gloves", "Moto Gloves", "Hand Wraps", "Bloodhound Gloves"):
+                        prefix = "★ "
+                    if is_stattrak:
+                        prefix += "StatTrak™ "
+                    if weapon_en:
+                        full_name = f"{prefix}{weapon_en} | {en} ({wear_en})"
+                    else:
+                        full_name = f"{prefix}{en} ({wear_en})"
+                    print(f"  [字典] 🛠️ 組裝: {full_name}")
+
                     # 判斷價格 — 優先抓「=」後面的結果(如 同磨底2100*4.4=9200 → 9200)
                     import re
                     price = -1
@@ -365,11 +402,10 @@ def extract_skin_info(post_text: str) -> dict | None:
                         price = int(m_eq.group(1))
                     else:
                         # 沒有「=」→ 抓最像賣價的數字
-                        # 排除「4.4」「4.3」這種匯率倍率
                         candidates = re.findall(r'(?<![\d.])(\d{3,})(?:NT|TWD|\$)?', text_clean)
                         if candidates:
-                            price = int(candidates[-1])  # 通常最後的數字是賣價
-                    return {"market_hash_name": en, "seller_price": price, "confidence": "high"}
+                            price = int(candidates[-1])
+                    return {"market_hash_name": full_name, "seller_price": price, "confidence": "high"}
         except Exception:
             pass
 
