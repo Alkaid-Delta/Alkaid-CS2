@@ -37,17 +37,27 @@ def extract_pattern(name: str) -> str:
 
 
 def download_csgo_api():
-    """用 id mapping 建立簡中→英文對照 (最可靠)"""
-    en_data = fetch(API.format(lang="en"))
-    cn_data = fetch(API.format(lang="zh-CN"))
+    """用 id mapping 建立簡中+繁中→英文對照 (最可靠)"""
+    local = os.path.join(BASE, "local_api")
+    data = {}
+    for lang in ["en", "zh-CN", "zh-TW"]:
+        local_file = os.path.join(local, lang, "skins.json")
+        if os.path.exists(local_file):
+            with open(local_file, "r", encoding="utf-8") as f:
+                data[lang] = json.load(f)
+            print(f"     [本地] {lang}/skins.json {len(data[lang])} 筆")
+        else:
+            print(f"     [線上] 下載 {lang}...")
+            data[lang] = fetch(API.format(lang=lang))
 
-    # id → name
-    en_by_id = {s["id"]: s["name"] for s in en_data}
-    cn_by_id = {s["id"]: s["name"] for s in cn_data}
+    en_by_id = {s["id"]: s["name"] for s in data["en"]}
+    cn_by_id = {s["id"]: s["name"] for s in data.get("zh-CN", [])}
+    tw_by_id = {s["id"]: s["name"] for s in data.get("zh-TW", [])}
 
-    full_map = {}    # 簡中完整名 → 英文完整名
-    pattern_map = {}  # 簡中花紋 → 英文花紋
+    full_map = {}     # 中文完整名 → 英文完整名
+    pattern_map = {}  # 中文花紋 → 英文花紋
 
+    # 簡中 (主)
     for sid, cn_name in cn_by_id.items():
         en_name = en_by_id.get(sid)
         if not en_name or not cn_name:
@@ -57,6 +67,17 @@ def download_csgo_api():
         en_pat = extract_pattern(en_name)
         if cn_pat and en_pat and cn_pat != en_pat:
             pattern_map[cn_pat] = en_pat
+
+    # 繁中 (覆蓋簡中，繁體優先) — FB 社團用繁體
+    for sid, tw_name in tw_by_id.items():
+        en_name = en_by_id.get(sid)
+        if not en_name or not tw_name:
+            continue
+        full_map[tw_name] = en_name
+        tw_pat = extract_pattern(tw_name)
+        en_pat = extract_pattern(en_name)
+        if tw_pat and en_pat and tw_pat != en_pat:
+            pattern_map[tw_pat] = en_pat
 
     return full_map, pattern_map
 
