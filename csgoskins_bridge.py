@@ -96,10 +96,12 @@ def _try_openskin(skin_name: str, target_wear: str) -> dict | None:
         if not ask:
             return None
 
-        rmb = float(ask)
-        twd = rmb * 4.5
-        result = {"price_twd": round(twd, 2), "price_rmb": rmb, "wear": target_wear}
-        _log(f"  [openskin] ✅ {skin_name} → ¥{rmb:,.2f} → NT${twd:,.0f}")
+        # openskin API 回傳 USD！需轉換: USD → RMB (×7.2) → TWD (×4.5)
+        usd = float(ask)
+        rmb = usd * 7.2
+        twd = rmb * 4.5  # ≈ usd × 32.4
+        result = {"price_twd": round(twd, 2), "price_rmb": round(rmb, 2), "wear": target_wear}
+        _log(f"  [openskin] ✅ {skin_name} → ${usd:,.2f} USD = ¥{rmb:,.2f} RMB → NT${twd:,.0f}")
         return result
     except urllib.error.HTTPError as e:
         if e.code == 404:
