@@ -356,12 +356,19 @@ def extract_skin_info(post_text: str) -> dict | None:
                         wear_en = "Well-Worn"
                     elif any(w in post_text for w in ["战痕","戰痕","BS"]):
                         wear_en = "Battle-Scarred"
-                    # 判斷價格
+                    # 判斷價格 — 優先抓「=」後面的結果(如 同磨底2100*4.4=9200 → 9200)
                     import re
                     price = -1
-                    m = re.search(r'(\d[\d,]*)\s*(?:NT|TWD|\$)?', post_text.replace(',',''))
-                    if m:
-                        price = int(m.group(1))
+                    text_clean = post_text.replace(',', '')
+                    m_eq = re.search(r'=\s*(\d[\d,]*)\s*(?:NT|TWD)?', text_clean)
+                    if m_eq:
+                        price = int(m_eq.group(1))
+                    else:
+                        # 沒有「=」→ 抓最像賣價的數字
+                        # 排除「4.4」「4.3」這種匯率倍率
+                        candidates = re.findall(r'(?<![\d.])(\d{3,})(?:NT|TWD|\$)?', text_clean)
+                        if candidates:
+                            price = int(candidates[-1])  # 通常最後的數字是賣價
                     return {"market_hash_name": en, "seller_price": price, "confidence": "high"}
         except Exception:
             pass
@@ -386,6 +393,8 @@ def extract_skin_info(post_text: str) -> dict | None:
 - 多普勒=Doppler, 伽瑪多普勒=Gamma Doppler
 - 大理石=Fade/Marble Fade, 偽冰火=Fake Fire&Ice
 - 底=最低價, 同磨=同磨損區間
+- **同磨底=BUFF上同磨損區間的最低價**,貼文常寫「同磨底X*4.4」= BUFF最低價乘匯率
+- 如「同磨底 2100*4.4=9200」代表 BUFF 同磨損最低價 2100 RMB × 4.4 匯率 = 賣 9200 TWD
 - 久經=Field-Tested(FT), 嶄新=Factory New(FN)
 - 略磨=Minimal Wear(MW), 破損=Well-Worn(WW)
 - 戰痕=Battle-Scarred(BS)
