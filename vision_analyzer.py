@@ -64,6 +64,13 @@ def analyze_image(image_bytes: bytes, retry: int = 2, custom_prompt: str | None 
         "⑤ BUFF市場列表：同商品的各家報價，最低價排最上面\n"
         "⑥ 遊戲內檢視：CS2遊戲截圖，顯示浮點、貼紙、命名標籤\n\n"
 
+        "=== 暗金(StatTrak)辨識 ===\n"
+        "以下兩種情況代表**暗金武器(StatTrak™)**：\n"
+        "- 物品名稱前有 StatTrak™ 字樣\n"
+        "- 物品欄圖示有醒目的橘紅色/紅色外框\n"
+        "暗金武器名稱格式: StatTrak™ AK-47 | Redline (Field-Tested)\n"
+        "★ StatTrak™ Butterfly Knife | Fade (Factory New)\n\n"
+
         "=== 提取規則 ===\n"
         "- 類型① → 只取**打勾(✔)+黃色邊框**的項目，灰色無框的忽略\n"
         "- 類型②③④⑥ → 整頁就是那一件要賣的物品\n"

@@ -402,6 +402,9 @@ def extract_skin_info(post_text: str) -> dict | None:
 - 略磨=Minimal Wear(MW), 破損=Well-Worn(WW)
 - 戰痕=Battle-Scarred(BS)
 - **手套和刀類名稱前面必須加 ★**(如 ★ Sport Gloves | Vice),槍類不加
+- **暗金(StatTrak™)辨識**:名稱前有 StatTrak™ 或貼文提到「暗金」= 暗金武器
+- 暗金名稱格式: StatTrak™ AK-47 | Redline (Field-Tested) / ★ StatTrak™ Butterfly Knife | Fade (Factory New)
+- 暗金武器價格通常比普通版貴,必須正確標記
 
 === 貼文內容 ===
 {post_text}
