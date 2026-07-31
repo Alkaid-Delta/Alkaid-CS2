@@ -339,8 +339,50 @@ def extract_skin_info(post_text: str) -> dict | None:
     if os.path.exists(dict_path):
         try:
             with open(dict_path, "r", encoding="utf-8") as f:
-                skin_dict = _json.load(f).get("pattern_cn_to_en", {})
+                dict_data = _json.load(f)
+            skin_dict = dict_data.get("pattern_cn_to_en", {})
+            full_dict = dict_data.get("full_cn_to_en", {})
 
+            # ── 第一優先: 完整名稱直接對照 ──
+            # 例如 Vision 讀到「沙漠之鹰 | 东方之谜」→ 直接對「Desert Eagle | Eastern Enigma」
+            for cn_full, en_full in full_dict.items():
+                if cn_full in post_text:
+                    print(f"  [字典] ✅ 完整名命中: {cn_full} → {en_full}")
+                    # 判斷磨損度
+                    wear_en = "Field-Tested"
+                    if any(w in post_text for w in ["崭新", "嶄新", "FN"]):
+                        wear_en = "Factory New"
+                    elif any(w in post_text for w in ["略有磨损", "略有磨損", "MW"]):
+                        wear_en = "Minimal Wear"
+                    elif any(w in post_text for w in ["久经", "久經", "FT"]):
+                        wear_en = "Field-Tested"
+                    elif any(w in post_text for w in ["破损不堪", "破損不堪", "WW"]):
+                        wear_en = "Well-Worn"
+                    elif any(w in post_text for w in ["战痕", "戰痕", "BS"]):
+                        wear_en = "Battle-Scarred"
+                    # 暗金
+                    is_st = "暗金" in post_text or "StatTrak" in post_text
+                    full_name = en_full
+                    if is_st and "StatTrak" not in full_name:
+                        full_name = full_name.replace("★ ", "★ StatTrak™ ", 1)
+                        if "★ " not in full_name:
+                            full_name = "StatTrak™ " + full_name
+                    full_name = f"{full_name} ({wear_en})"
+                    print(f"  [字典] 🛠️ 組裝: {full_name}")
+                    # 價格
+                    import re
+                    price = -1
+                    text_clean = post_text.replace(',', '')
+                    m_eq = re.search(r'=\s*(\d[\d,]*)\s*(?:NT|TWD)?', text_clean)
+                    if m_eq:
+                        price = int(m_eq.group(1))
+                    else:
+                        candidates = re.findall(r'(?<![\d.])(\d{3,})(?:NT|TWD|\$)?', text_clean)
+                        if candidates:
+                            price = int(candidates[-1])
+                    return {"market_hash_name": full_name, "seller_price": price, "confidence": "high"}
+
+            # ── 第二優先: 花紋對照 + 武器拼裝 ──
             # 武器中英對照（保留武器前綴用）
             weapon_map = {
                 "AK-47": "AK-47", "ak": "AK-47", "阿卡": "AK-47",
