@@ -300,10 +300,12 @@ def fetch_posts(max_scrolls=50, max_posts=15):
 
         print(f" {len(all_posts)} 篇")
 
-        # ── 圖片優先：有圖就先讀圖 ──
+        # ── 圖片優先：每張圖獨立分析，各自綁定名稱/磨損/價格（互不污染）──
         for p in all_posts:
             if not p['images']:
                 continue
+            # 每張圖的結果獨立存到 items，不塞進文字
+            p['items'] = []
 
             # 如果 FB 已 OCR 圖片 alt text，直接用它（不用 Vision，省成本）
             alt_text = p.get('alt_text', '')
@@ -312,50 +314,94 @@ def fetch_posts(max_scrolls=50, max_posts=15):
                 print(f"  [FB] 🖼️ 圖片 alt: {alt_text[:80]}")
                 continue
 
-            # 否則用 Vision 讀圖
+            # 否則用 Vision 讀圖（先判斷類型：庫存列表→切格子 / 單一物品→整圖）
             try:
                 import requests as _req
                 import vision_analyzer as va
                 if not os.environ.get("OPENROUTER_API_KEY"):
                     os.environ["OPENROUTER_API_KEY"] = _get_cfg("OPENROUTER_API_KEY", "")
 
-                for img_url in p['images'][:3]:  # 最多看 3 張
+                for img_url in p['images'][:3]:  # 每張圖獨立處理
                     resp = _req.get(img_url, timeout=15)
                     if resp.status_code != 200:
                         continue
-                    result = va.analyze_image(
+
+                    # ── Step 1: 判斷圖片類型 ──
+                    type_result = va.analyze_image(
                         resp.content,
                         custom_prompt=(
-                            "CS2交易截圖.判斷類型(庫存/詳情/Steam/遊戲內)."
-                            "提取要賣的物品,輸出JSON陣列:"
-                            '[{"name":"完整中文名含★","wear":"磨損度","price":數字,"currency":"TWD/RMB"}]'
-                            "庫存只取打勾的項目,單一物品頁就是那件.無法辨識回傳[]"
+                            "判斷這張 CS2 截圖類型，只回傳 JSON:"
+                            '{"type":"inventory"或"single"或"other",'
+                            '"rows":數字,"cols":數字}'
+                            "inventory=多物品庫存列表(有格子), rows/cols=格子數(如3列7行)"
+                            "single=單一物品詳情頁/Steam頁/遊戲內檢視"
                         ),
                         retry=1
                     )
-                    if result and isinstance(result, list) and len(result) > 0:
-                        items = result
-                    elif result and isinstance(result, dict):
-                        items = [result]
+                    if type_result and isinstance(type_result, dict):
+                        img_type = type_result.get('type', 'other')
+                        rows = int(type_result.get('rows') or 7)
+                        cols = int(type_result.get('cols') or 3)
                     else:
-                        continue
+                        img_type = 'single'
+                        rows, cols = 7, 3
 
-                    vision_texts = []
-                    for item in items:
-                        cn = item.get('chinese_name', item.get('name', ''))
-                        wear = item.get('wear', '')
-                        price = item.get('price', 0)
-                        cur = item.get('currency', 'RMB')
-                        st = "StatTrak " if item.get('stattrak') else ""
-                        skin_text = f"{st}{cn} {wear}"
-                        if price:
-                            skin_text += f" {price}{cur}"
-                        vision_texts.append(skin_text)
+                    # ── Step 2: 依類型分流 ──
+                    if img_type == 'inventory':
+                        # 庫存列表 → 切格子，只取打勾的格子（避免 Vision 幻覺）
+                        import vision_pipeline as vp
+                        grid_results = vp.run_pipeline_sync(
+                            resp.content, rows=max(rows,2), cols=max(cols,2),
+                            max_concurrent=3, threshold=0.7
+                        )
+                        checked = [r for r in grid_results
+                                   if r.get('is_checked') and r.get('success')
+                                   and r.get('name')]
+                        for r in checked:
+                            p['items'].append({
+                                "name": r.get('name', ''),
+                                "wear": r.get('wear', ''),
+                                "price": r.get('price', 0),
+                                "currency": r.get('currency', 'RMB'),
+                            })
+                        if checked:
+                            print(f"  [FB] 🖼️ 庫存圖: {len(checked)}/{len(grid_results)} 格打勾")
+                    else:
+                        # 單一物品頁 → 整圖讀取
+                        result = va.analyze_image(
+                            resp.content,
+                            custom_prompt=(
+                                "CS2交易截圖.提取要賣的物品,輸出JSON陣列:"
+                                '[{"name":"完整中文名含★","wear":"磨損度","price":數字,"currency":"TWD/RMB"}]'
+                                "單一物品頁就是那件.無法辨識回傳[]"
+                            ),
+                            retry=1
+                        )
+                        if result and isinstance(result, list) and len(result) > 0:
+                            items = result
+                        elif result and isinstance(result, dict):
+                            items = [result]
+                        else:
+                            items = []
 
-                    if vision_texts:
-                        p['text'] = "[圖片] 售 " + " + ".join(vision_texts)
-                        print(f"  [FB] 🖼️ 圖片優先: {p['text'][:100]}")
-                        break  # 成功讀到一張圖就夠了
+                        for item in items:
+                            cn = item.get('chinese_name', item.get('name', ''))
+                            wear = item.get('wear', '')
+                            price = item.get('price', 0)
+                            cur = item.get('currency', 'RMB')
+                            st = "StatTrak " if item.get('stattrak') else ""
+                            if cn:
+                                p['items'].append({
+                                    "name": f"{st}{cn}",
+                                    "wear": wear,
+                                    "price": price,
+                                    "currency": cur,
+                                })
+
+                    if p['items']:
+                        n = len(p['items'])
+                        print(f"  [FB] 🖼️ 圖片: {n} 件物品 (第一件: {p['items'][0]['name'][:40]})")
+                        break  # 讀到一張圖的結果就夠了
             except ImportError:
                 pass
             except Exception as e:
@@ -364,14 +410,29 @@ def fetch_posts(max_scrolls=50, max_posts=15):
         browser.close()
 
     # ── 轉換成標準輸出格式 ──
+    # 每張圖的每個物品 = 獨立一筆候選（解決多物品貼文）
     results = []
     for i, p in enumerate(all_posts[:max_posts]):
-        results.append({
-            "id": f"p{i}",
-            "author": p['author'],
-            "content": p['text'],
-            "link": p['url'] or "https://www.facebook.com/groups/allinunderdog"
-        })
+        items = p.get('items') or []
+        if items:
+            # 多物品：每件獨立成一筆，共用作者/連結
+            for j, item in enumerate(items):
+                skin_text = f"[圖片] 售 {item['name']} {item['wear']}"
+                if item.get('price'):
+                    skin_text += f" {item['price']}{item['currency']}"
+                results.append({
+                    "id": f"p{i}_item{j}",
+                    "author": p['author'],
+                    "content": skin_text,
+                    "link": p['url'] or "https://www.facebook.com/groups/allinunderdog",
+                })
+        else:
+            results.append({
+                "id": f"p{i}",
+                "author": p['author'],
+                "content": p['text'],
+                "link": p['url'] or "https://www.facebook.com/groups/allinunderdog"
+            })
 
-    print(f"  [FB] ✅ {len(results)} 篇（API 攔截）")
+    print(f"  [FB] ✅ {len(results)} 筆（含多物品拆分）")
     return results
