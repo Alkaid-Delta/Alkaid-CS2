@@ -1,0 +1,95 @@
+[
+  {
+    "id": "simple_single_twd",
+    "text": "售 AK-47 | 红线 久经沙场 5000",
+    "images": [],
+    "notes": "Simple single item with TWD price, full-name dict hit",
+    "known_defect": null
+  },
+  {
+    "id": "legacy_single_nocts",
+    "text": "售 夜行衣 久經 5000",
+    "images": [],
+    "notes": "Legacy single-item flow, pattern dict hit (夜行衣=Nocts)",
+    "known_defect": null
+  },
+  {
+    "id": "redline_vulcan_simplified",
+    "text": "出2把傳家寶ak 14卡托红线 7480 火神4xtitan 14000",
+    "images": [],
+    "notes": "Two selling items with separate prices (simplified 红线)",
+    "known_defect": "first_match_return: only one item returned, order-dependent"
+  },
+  {
+    "id": "redline_vulcan_traditional",
+    "text": "出2把傳家寶ak 14卡托紅線 7480 火神4xtitan 14000",
+    "images": [],
+    "notes": "Two selling items, traditional 紅線 (missing in pattern dict)",
+    "known_defect": "traditional_variant_missing: 紅線 not in pattern_cn_to_en"
+  },
+  {
+    "id": "seller_ask_plus_buff_floor",
+    "text": "售 夜行衣 久經 同磨底2100*4.4=9200算5000",
+    "images": [],
+    "notes": "Seller ask 5000 coexists with BUFF floor 2100 (同磨底)",
+    "known_defect": "price_role_not_distinguished: buff_floor treated as same price class"
+  },
+  {
+    "id": "rmb_price_no_conversion_marker",
+    "text": "售 AK-47 | 印花集 崭新出厂 9500RMB",
+    "images": [],
+    "notes": "RMB price: legacy path has no currency field, treats as TWD",
+    "known_defect": "currency_lost_on_dict_hit: RMB not marked, no conversion"
+  },
+  {
+    "id": "validation_failure_returns_first",
+    "text": "售 神秘皮膚 5000",
+    "images": [],
+    "notes": "Dict miss -> DeepSeek -> validation fail twice -> must be unresolved",
+    "known_defect": "returns_unverified_first_result: L562 returns data after 2 failures",
+    "requires_api_key": true
+  },
+  {
+    "id": "multi_image_second_has_price",
+    "text": "[圖片] 售 AK-47 | 红线 久经沙场",
+    "images": ["img1_no_price", "img2_with_price"],
+    "notes": "Second image contains price; crawler breaks after first successful image",
+    "known_defect": "first_image_break: only first successful image processed, price lost",
+    "requires_crawler": true
+  },
+  {
+    "id": "stat_trak_ak",
+    "text": "售 暗金 AK-47 | 红线 久经沙场 8000",
+    "images": [],
+    "notes": "StatTrak item detection",
+    "known_defect": null
+  },
+  {
+    "id": "knife_star_prefix",
+    "text": "售 爪子刀 虎牙 崭新出厂 27000",
+    "images": [],
+    "notes": "Knife with star prefix (Karambit | Tiger Tooth)",
+    "known_defect": null
+  },
+  {
+    "id": "buying_post_nocts",
+    "text": "收 夜行衣 久經 5000",
+    "images": [],
+    "notes": "Buying post (收): role must be buying, not selling",
+    "known_defect": "role_not_distinguished: legacy has no ItemRole, buying treated as selling"
+  },
+  {
+    "id": "trade_only_post",
+    "text": "換 爪子刀 虎牙 貼 蝴蝶刀 漸層",
+    "images": [],
+    "notes": "Trade-only post (換/貼): must not be treated as selling",
+    "known_defect": "role_not_distinguished: legacy has no ItemRole, trade treated as selling"
+  },
+  {
+    "id": "no_price_selling_post",
+    "text": "售 AK-47 | 红线 久经沙场",
+    "images": [],
+    "notes": "Selling post without price: item resolvable, seller_price must be null/-1",
+    "known_defect": null
+  }
+]

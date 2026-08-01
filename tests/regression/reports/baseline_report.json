@@ -1,0 +1,143 @@
+{
+  "generated_at": "2026-08-01T02:34:08.676566+00:00",
+  "branch": "agent/v2-architecture-baseline",
+  "commit": "3eb8fe2",
+  "suite": {
+    "exit_code": 0,
+    "summary": "=================== 5 passed, 1 skipped, 7 xfailed in 0.23s ===================",
+    "per_test": {
+      "test_simple_single_twd": "PASSED",
+      "test_legacy_single_nocts": "PASSED",
+      "test_redline_vulcan_simplified": "XFAIL",
+      "test_redline_vulcan_traditional": "XFAIL",
+      "test_seller_ask_plus_buff_floor": "XFAIL",
+      "test_rmb_price_no_conversion_marker": "XFAIL",
+      "test_validation_failure_returns_first": "XFAIL",
+      "test_multi_image_second_has_price": "SKIPPED",
+      "test_stat_trak_ak": "PASSED",
+      "test_knife_star_prefix": "PASSED",
+      "test_buying_post_nocts": "XFAIL",
+      "test_trade_only_post": "XFAIL",
+      "test_no_price_selling_post": "PASSED"
+    },
+    "raw_tail": "\ntests/regression/test_golden_posts.py::test_simple_single_twd PASSED     [  7%]\ntests/regression/test_golden_posts.py::test_legacy_single_nocts PASSED   [ 15%]\ntests/regression/test_golden_posts.py::test_redline_vulcan_simplified XFAIL [ 23%]\ntests/regression/test_golden_posts.py::test_redline_vulcan_traditional XFAIL [ 30%]\ntests/regression/test_golden_posts.py::test_seller_ask_plus_buff_floor XFAIL [ 38%]\ntests/regression/test_golden_posts.py::test_rmb_price_no_conversion_marker XFAIL [ 46%]\ntests/regression/test_golden_posts.py::test_validation_failure_returns_first XFAIL [ 53%]\ntests/regression/test_golden_posts.py::test_multi_image_second_has_price SKIPPED [ 61%]\ntests/regression/test_golden_posts.py::test_stat_trak_ak PASSED          [ 69%]\ntests/regression/test_golden_posts.py::test_knife_star_prefix PASSED     [ 76%]\ntests/regression/test_golden_posts.py::test_buying_post_nocts XFAIL      [ 84%]\ntests/regression/test_golden_posts.py::test_trade_only_post XFAIL (k...) [ 92%]\ntests/regression/test_golden_posts.py::test_no_price_selling_post PASSED [100%]\n\n=========================== short test summary info ===========================\nSKIPPED [1] tests\\regression\\test_golden_posts.py:213: requires_crawler: 需要 Playwright+FB 環境，Phase 0 不模擬 crawler\nXFAIL tests/regression/test_golden_posts.py::test_redline_vulcan_simplified - known_defect: first_match_return — 字典第一命中即 return，無法回多商品\nXFAIL tests/regression/test_golden_posts.py::test_redline_vulcan_traditional - known_defect: traditional_variant_missing — 紅線(繁)不在 pattern_cn_to_en，貼文只命中火神\nXFAIL tests/regression/test_golden_posts.py::test_seller_ask_plus_buff_floor - known_defect: price_role_not_distinguished — legacy 無 typed price 支援\nXFAIL tests/regression/test_golden_posts.py::test_rmb_price_no_conversion_marker - known_defect: currency_lost_on_dict_hit — RMB 未被標記，未經 CurrencyService\nXFAIL tests/regression/test_golden_posts.py::test_validation_failure_returns_first - known_defect: returns_unverified_first_result — 驗證兩次失敗仍回傳第一次名稱 (L562)\nXFAIL tests/regression/test_golden_posts.py::test_buying_post_nocts - known_defect: role_not_distinguished — legacy 無 ItemRole，求購文被當 selling\nXFAIL tests/regression/test_golden_posts.py::test_trade_only_post - known_defect: role_not_distinguished — legacy 無 ItemRole，交換文被當 selling\n=================== 5 passed, 1 skipped, 7 xfailed in 0.23s ==================="
+  },
+  "fixture_count": 13,
+  "cases": [
+    {
+      "id": "simple_single_twd",
+      "notes": "Simple single item with TWD price, full-name dict hit",
+      "known_defect": null,
+      "expected_status": "ok",
+      "requires_api_key": false,
+      "requires_crawler": false
+    },
+    {
+      "id": "legacy_single_nocts",
+      "notes": "Legacy single-item flow, pattern dict hit (夜行衣=Nocts)",
+      "known_defect": null,
+      "expected_status": "ok",
+      "requires_api_key": false,
+      "requires_crawler": false
+    },
+    {
+      "id": "redline_vulcan_simplified",
+      "notes": "Two selling items with separate prices (simplified 红线)",
+      "known_defect": "first_match_return: only one item returned, order-dependent",
+      "expected_status": "partial",
+      "requires_api_key": false,
+      "requires_crawler": false
+    },
+    {
+      "id": "redline_vulcan_traditional",
+      "notes": "Two selling items, traditional 紅線 (missing in pattern dict)",
+      "known_defect": "traditional_variant_missing: 紅線 not in pattern_cn_to_en",
+      "expected_status": "partial",
+      "requires_api_key": false,
+      "requires_crawler": false
+    },
+    {
+      "id": "seller_ask_plus_buff_floor",
+      "notes": "Seller ask 5000 coexists with BUFF floor 2100 (同磨底)",
+      "known_defect": "price_role_not_distinguished: buff_floor treated as same price class",
+      "expected_status": "partial",
+      "requires_api_key": false,
+      "requires_crawler": false
+    },
+    {
+      "id": "rmb_price_no_conversion_marker",
+      "notes": "RMB price: legacy path has no currency field, treats as TWD",
+      "known_defect": "currency_lost_on_dict_hit: RMB not marked, no conversion",
+      "expected_status": "partial",
+      "requires_api_key": false,
+      "requires_crawler": false
+    },
+    {
+      "id": "validation_failure_returns_first",
+      "notes": "Dict miss -> DeepSeek -> validation fail twice -> must be unresolved",
+      "known_defect": "returns_unverified_first_result: L562 returns data after 2 failures",
+      "expected_status": "unresolved",
+      "requires_api_key": true,
+      "requires_crawler": false
+    },
+    {
+      "id": "multi_image_second_has_price",
+      "notes": "Second image contains price; crawler breaks after first successful image",
+      "known_defect": "first_image_break: only first successful image processed, price lost",
+      "expected_status": "partial",
+      "requires_api_key": false,
+      "requires_crawler": true
+    },
+    {
+      "id": "stat_trak_ak",
+      "notes": "StatTrak item detection",
+      "known_defect": null,
+      "expected_status": "ok",
+      "requires_api_key": false,
+      "requires_crawler": false
+    },
+    {
+      "id": "knife_star_prefix",
+      "notes": "Knife with star prefix (Karambit | Tiger Tooth)",
+      "known_defect": null,
+      "expected_status": "ok",
+      "requires_api_key": false,
+      "requires_crawler": false
+    },
+    {
+      "id": "buying_post_nocts",
+      "notes": "Buying post (收): role must be buying, not selling",
+      "known_defect": "role_not_distinguished: legacy has no ItemRole, buying treated as selling",
+      "expected_status": "partial",
+      "requires_api_key": false,
+      "requires_crawler": false
+    },
+    {
+      "id": "trade_only_post",
+      "notes": "Trade-only post (換/貼): must not be treated as selling",
+      "known_defect": "role_not_distinguished: legacy has no ItemRole, trade treated as selling",
+      "expected_status": "partial",
+      "requires_api_key": false,
+      "requires_crawler": false
+    },
+    {
+      "id": "no_price_selling_post",
+      "notes": "Selling post without price: item resolvable, seller_price must be null/-1",
+      "known_defect": null,
+      "expected_status": "ok",
+      "requires_api_key": false,
+      "requires_crawler": false
+    }
+  ],
+  "metrics": {
+    "item_exact_match": null,
+    "seller_price_exact_match": null,
+    "currency_accuracy": null,
+    "item_price_link_accuracy": null,
+    "unresolved_rate": null,
+    "false_positive_deal_count": null,
+    "avg_latency_ms": null,
+    "flash_pro_ratio": null,
+    "model_cost_per_100_posts": null
+  }
+}

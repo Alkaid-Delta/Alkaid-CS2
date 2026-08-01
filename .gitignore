@@ -12,6 +12,7 @@ config.txt
 # State & cache
 analyzer_state.json
 deals_history.json
+buff_cache.json
 *.jpg
 *.png
 

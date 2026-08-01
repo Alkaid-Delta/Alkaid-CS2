@@ -1,0 +1,176 @@
+{
+  "simple_single_twd": {
+    "status": "ok",
+    "items": [
+      {
+        "skin": "Redline",
+        "wear": "Field-Tested",
+        "role": "selling",
+        "seller_price": 5000,
+        "currency": "TWD",
+        "weapon": "AK-47"
+      }
+    ]
+  },
+  "legacy_single_nocts": {
+    "status": "ok",
+    "items": [
+      {
+        "skin": "Nocts",
+        "role": "selling",
+        "seller_price": 5000,
+        "currency": "TWD",
+        "weapon": "Sport Gloves"
+      }
+    ]
+  },
+  "redline_vulcan_simplified": {
+    "status": "partial",
+    "items": [
+      {
+        "skin": "Redline",
+        "role": "selling",
+        "seller_price": 7480,
+        "currency": "TWD"
+      },
+      {
+        "skin": "Vulcan",
+        "role": "selling",
+        "seller_price": 14000,
+        "currency": "TWD"
+      }
+    ],
+    "notes": "Legacy returns at most one item; expected two"
+  },
+  "redline_vulcan_traditional": {
+    "status": "partial",
+    "items": [
+      {
+        "skin": "Redline",
+        "role": "selling",
+        "seller_price": 7480,
+        "currency": "TWD"
+      },
+      {
+        "skin": "Vulcan",
+        "role": "selling",
+        "seller_price": 14000,
+        "currency": "TWD"
+      }
+    ],
+    "notes": "Traditional 紅線 may be missed by pattern dict"
+  },
+  "seller_ask_plus_buff_floor": {
+    "status": "partial",
+    "items": [
+      {
+        "skin": "Nocts",
+        "role": "selling",
+        "seller_price": 5000,
+        "currency": "TWD"
+      }
+    ],
+    "prices": [
+      {
+        "amount": 2100,
+        "currency": "RMB",
+        "price_type": "buff_floor"
+      },
+      {
+        "amount": 9200,
+        "currency": "TWD",
+        "price_type": "calculated"
+      },
+      {
+        "amount": 5000,
+        "currency": "TWD",
+        "price_type": "seller_ask"
+      }
+    ],
+    "notes": "Typed prices required: buff_floor 2100 RMB, calculated 9200 TWD, seller_ask 5000 TWD. Legacy has no typed price support."
+  },
+  "rmb_price_no_conversion_marker": {
+    "status": "partial",
+    "items": [
+      {
+        "skin": "Printstream",
+        "role": "selling",
+        "seller_price": 9500,
+        "currency": "RMB"
+      }
+    ],
+    "notes": "Legacy returns 9500 without currency marker; expected RMB and conversion path"
+  },
+  "validation_failure_returns_first": {
+    "status": "unresolved",
+    "items": [],
+    "notes": "Two validation failures must yield unresolved, never first invalid name"
+  },
+  "multi_image_second_has_price": {
+    "status": "partial",
+    "items": [
+      {
+        "skin": "Redline",
+        "role": "selling",
+        "seller_price": null,
+        "currency": null
+      }
+    ],
+    "notes": "Expected price from second image; crawler breaks on first success"
+  },
+  "stat_trak_ak": {
+    "status": "ok",
+    "items": [
+      {
+        "skin": "Redline",
+        "stattrak": true,
+        "role": "selling",
+        "seller_price": 8000,
+        "currency": "TWD"
+      }
+    ]
+  },
+  "knife_star_prefix": {
+    "status": "ok",
+    "items": [
+      {
+        "skin": "Tiger Tooth",
+        "wear": "Factory New",
+        "role": "selling",
+        "seller_price": 27000,
+        "currency": "TWD",
+        "weapon": "Karambit"
+      }
+    ]
+  },
+  "no_price_selling_post": {
+    "status": "ok",
+    "items": [
+      {
+        "skin": "Redline",
+        "wear": "Field-Tested",
+        "role": "selling",
+        "seller_price": null,
+        "currency": null
+      }
+    ],
+    "notes": "Item resolvable, seller_price must be null (legacy returns -1)"
+  },
+  "buying_post_nocts": {
+    "status": "partial",
+    "items": [
+      {
+        "skin": "Nocts",
+        "role": "buying",
+        "seller_price": 5000,
+        "currency": "TWD"
+      }
+    ],
+    "notes": "Legacy has no role concept; buying treated as selling"
+  },
+  "trade_only_post": {
+    "status": "partial",
+    "items": [],
+    "notes": "Trade-only post must not produce selling items; legacy returns one dict (first match)"
+  }
+}
