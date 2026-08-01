@@ -58,6 +58,83 @@ def compute_opaque_case_key(case_id: str, run_salt: str) -> str:
         f"{case_id}::{run_salt}".encode("utf-8")).hexdigest()
 
 
+# ---- Phase 6.4C2-B1：cache identity / lookup ----
+
+def compute_analyzer_cache_key(
+    *,
+    opaque_case_key: str,
+    image_index: int,
+    image_sha256: str,
+    analyzer_name: str,
+    analyzer_version: str,
+    schema_version: str = CACHE_SCHEMA_VERSION,
+) -> str:
+    """Cache identity：opaque key + image index + image SHA-256 +
+    analyzer name/version + schema version（不得只用 case key）。"""
+    identity = json.dumps({
+        "opaque_case_key": opaque_case_key,
+        "image_index": image_index,
+        "image_sha256": image_sha256,
+        "analyzer_name": analyzer_name,
+        "analyzer_version": analyzer_version,
+        "schema_version": schema_version,
+    }, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(identity.encode("utf-8")).hexdigest()
+
+
+def cache_record_filename(cache_key: str) -> str:
+    return f"{cache_key}.json"
+
+
+def load_analyzer_cache_record(
+    cache_key: str,
+    cache_dir: str | os.PathLike[str],
+    *,
+    analyzer_name: str,
+    analyzer_version: str,
+) -> tuple[dict | None, list[str]]:
+    """讀取並嚴格驗證 cache record（Phase 6.4C2-B1.1 錯誤正規化）。
+
+    回傳 (record | None, errors)，errors 只含固定碼：
+    - 檔案不存在 → (None, [])（正常 miss）
+    - 檔案讀取/JSON/UTF-8 失敗 → (None, ["cache_read_failed"])
+    - record schema / result hash / normalized result / status 不合法
+      → (None, ["cache_record_invalid"])
+    - computed cache identity 不符 → (None, ["cache_identity_mismatch"])
+
+    不得向 engine 回傳內部 schema detail（result_sha256_mismatch、
+    unknown_fields、privacy、item_xxx 等）。
+    """
+    path = Path(cache_dir) / cache_record_filename(cache_key)
+    if not path.exists():
+        return None, []
+    try:
+        raw = path.read_bytes()
+        record = json.loads(raw.decode("utf-8"))
+    except (OSError, ValueError, UnicodeDecodeError):
+        return None, ["cache_read_failed"]
+    if validate_cache_record(record):
+        return None, ["cache_record_invalid"]
+    # identity 交叉驗證（Phase 6.4C2-B1）：cache key 必須對應同一 identity
+    rec_key = compute_analyzer_cache_key(
+        opaque_case_key=record["opaque_case_key"],
+        image_index=record["image_index"],
+        image_sha256=record["image_sha256"],
+        analyzer_name=record["analyzer_name"],
+        analyzer_version=record["analyzer_version"],
+        schema_version=record["schema_version"])
+    if rec_key != cache_key:
+        return None, ["cache_identity_mismatch"]
+    if record["analyzer_name"] != analyzer_name \
+            or record["analyzer_version"] != analyzer_version:
+        return None, ["cache_identity_mismatch"]
+    if record["status"] != "success":
+        return None, ["cache_record_invalid"]
+    if validate_normalized_result(record["normalized_result"]):
+        return None, ["cache_record_invalid"]
+    return record, []
+
+
 def _is_utc_timestamp(value: str) -> bool:
     import datetime
     if not _UTC_TS_RE.match(value):
@@ -232,11 +309,15 @@ def validate_cache_record(record: dict) -> list[str]:
 def write_analyzer_cache_record(
     record: dict,
     cache_dir: str | os.PathLike[str],
+    *,
+    cache_key: str | None = None,
 ) -> str:
     """原子寫入 cache record（Git 外）；回傳寫入路徑。
 
     - 完整驗證（validate_cache_record）
     - 失敗 → AnalyzerCacheWriteError（固定碼，不含路徑/值）
+    - cache_key 提供時（Phase 6.4C2-B1）以 `<cache_key>.json` 命名；
+      未提供時維持 B0 命名 `<opaque_key>.<idx>.json`
     """
     record_errors = validate_cache_record(record)
     if record_errors:
@@ -247,7 +328,10 @@ def write_analyzer_cache_record(
     try:
         cache_path = Path(cache_dir)
         cache_path.mkdir(parents=True, exist_ok=True)
-        target = cache_path / f"{key}.{idx}.json"
+        if cache_key is not None:
+            target = cache_path / cache_record_filename(cache_key)
+        else:
+            target = cache_path / f"{key}.{idx}.json"
         # 原子寫入：唯一 temp → write+flush+fsync → os.replace
         tmp = cache_path / f".{target.name}.tmp.{uuid.uuid4().hex[:8]}"
         try:

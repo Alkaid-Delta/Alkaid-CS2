@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -266,7 +267,9 @@ def build_execution_plan(
         case_count=len(eligible_cases),
         image_count=sum(len(c["image_hashes"]) for c in eligible_cases),
         adapter_name=adapter_name,
-        cache_namespace=f"namespace-{run_id}",
+        # Phase 6.4C2-B1.2：cache_namespace 固定契約 = run_id 的 12-hex 部分；
+        # 不參與 cache identity、不含敏感值
+        cache_namespace=f"namespace-{run_id[4:]}",
         dry_run=dry_run, authorized=authorized,
     )
     for case in eligible_cases:
@@ -372,3 +375,403 @@ def run_dry_plan(
     if not ok:
         return 2, errors, plan
     return 0, [], plan
+
+
+# ================================================================
+# Phase 6.4C2-B1 — Offline fake execution engine
+# ================================================================
+EXECUTION_PLAN_STATUS_PLANNED = "planned"
+
+
+@dataclass
+class ExternalAnalyzerExecutionSummary:
+    """execution 結果摘要（不含任何敏感值）。
+
+    Phase 6.4C2-B1.1 accounting：
+    - processed = hits + misses + invalid
+    - attempted = 實際 adapter.analyze_image invocation 數（<= misses）
+    - loader 失敗 → miss+1、attempted 不增加、failed+1
+    """
+
+    run_id: str
+    planned_image_count: int
+    processed_image_count: int
+    attempted_image_count: int
+    succeeded_image_count: int
+    failed_image_count: int
+    cache_hit_count: int
+    cache_miss_count: int
+    cache_invalid_count: int
+    cache_write_count: int
+    fixed_error_codes: list[str] = field(default_factory=list)
+    status: str = "blocked"
+
+    def to_dict(self) -> dict:
+        return {
+            "run_id": self.run_id,
+            "planned_image_count": self.planned_image_count,
+            "processed_image_count": self.processed_image_count,
+            "attempted_image_count": self.attempted_image_count,
+            "succeeded_image_count": self.succeeded_image_count,
+            "failed_image_count": self.failed_image_count,
+            "cache_hit_count": self.cache_hit_count,
+            "cache_miss_count": self.cache_miss_count,
+            "cache_invalid_count": self.cache_invalid_count,
+            "cache_write_count": self.cache_write_count,
+            "fixed_error_codes": list(self.fixed_error_codes),
+            "status": self.status,
+        }
+
+
+def _is_valid_utc_timestamp(value: object) -> bool:
+    """Phase 6.4C2-B1.3：真正 datetime 驗證（非 regex only）。
+
+    - 完整符合 YYYY-MM-DDTHH:MM:SSZ
+    - 必須是真實存在的日期與時間（拒 2026-99-99、25:61 等）
+    - 不接受 timezone offset / fractional seconds / 非字串
+    """
+    import datetime
+    if not isinstance(value, str):
+        return False
+    try:
+        datetime.datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
+        return True
+    except ValueError:
+        return False
+
+
+def _is_valid_run_id(value: object) -> bool:
+    """Phase 6.4C2-B1.4：共用 run-ID 驗證（_safe_trace_run_id 與
+    preflight 使用同一契約；analyzer_audit 保持相同 regex）。"""
+    return (isinstance(value, str)
+            and re.fullmatch(r"run-[0-9a-f]{12}", value) is not None)
+
+
+def _safe_trace_run_id(plan_run_id: object) -> tuple[str, bool]:
+    """Phase 6.4C2-B1.3/B1.4：trace identity 契約。
+
+    - plan.run_id 合法 → (plan.run_id, True)（精確保留）
+    - 非法（含 None/int/object）→ 安全 run-<12 hex>、不回顯原始值
+      → (safe, False)
+    """
+    if _is_valid_run_id(plan_run_id):
+        return plan_run_id, True
+    return f"run-{uuid.uuid4().hex[:12]}", False
+
+
+def _append_error_once(errors: list[str], code: str) -> None:
+    """Phase 6.4C2-B1.4：order-preserving unique 固定錯誤碼。"""
+    if code not in errors:
+        errors.append(code)
+
+
+def _dedupe_errors(errors: list[str]) -> list[str]:
+    """order-preserving 去重（不得用 set 導致順序不穩定）。"""
+    return list(dict.fromkeys(errors))
+
+
+def _execution_preflight(
+    *,
+    plan: ExternalAnalyzerExecutionPlan,
+    eligible_cases: list[EligibleAnalyzerCase],
+    loader: Any,
+    adapter: Any,
+    cache_dir: str | os.PathLike[str],
+    audit_dir: str | os.PathLike[str],
+    allowed_root: str | os.PathLike[str],
+    analyzer_name: str,
+    analyzer_version: str,
+) -> list[str]:
+    """execution preflight：任一失敗 → 不呼叫 loader/adapter、不寫 cache。"""
+    errors: list[str] = []
+    if plan.status != EXECUTION_PLAN_STATUS_PLANNED:
+        errors.append("execution_plan_invalid")
+    if plan.dry_run:
+        errors.append("execution_plan_dry_run_only")
+    if not plan.authorized:
+        errors.append("execution_plan_not_authorized")
+    if plan.schema_version != PLAN_SCHEMA_VERSION:
+        errors.append("execution_plan_invalid")
+    # Phase 6.4C2-B1.2/B1.3/B1.4：plan 身份契約
+    # （run_id 非字串 → 不做 slicing、不轉路徑、安全 blocked）
+    run_id_valid = _is_valid_run_id(plan.run_id)
+    if not run_id_valid:
+        errors.append("execution_plan_invalid")
+    if not _is_valid_utc_timestamp(plan.created_at):
+        errors.append("execution_plan_invalid")
+    # Phase 6.4C2-B1.4：namespace 驗證（run_id 無效時不 slicing）
+    ns = plan.cache_namespace
+    expected_namespace = (
+        f"namespace-{plan.run_id[4:]}" if run_id_valid else None)
+    if not isinstance(ns, str):
+        errors.append("execution_plan_invalid")
+    elif not re.fullmatch(r"namespace-[0-9a-f]{12}", ns) \
+            or expected_namespace is None or ns != expected_namespace:
+        errors.append("execution_plan_invalid")
+    if loader is None:
+        errors.append(ERROR_LOADER_UNAVAILABLE)
+    if adapter is None:
+        errors.append(ERROR_ADAPTER_UNAVAILABLE)
+    try:
+        resolve_local_data_subdir(cache_dir, allowed_root)
+        resolve_local_data_subdir(audit_dir, allowed_root)
+    except ValueError:
+        errors.append(ERROR_OUTPUT_PATH)
+    # counts 與 eligible_cases 一致
+    if plan.case_count != len(eligible_cases):
+        errors.append("execution_plan_count_mismatch")
+    # case_keys 是 per-image（build_execution_plan 每張圖 append 一次）
+    if len(plan.case_keys) != plan.image_count:
+        errors.append("execution_plan_count_mismatch")
+    flat_hashes = [h for c in eligible_cases for h in c.image_hashes]
+    flat_refs = [r for c in eligible_cases for r in c.storage_references]
+    if plan.image_count != len(flat_hashes) or plan.image_count != len(flat_refs):
+        errors.append("execution_plan_count_mismatch")
+    if list(plan.expected_hashes) != flat_hashes:
+        errors.append("execution_plan_hash_mismatch")
+    # Phase 6.4C2-B1.1：image indexes 為 per-case range（扁平可重複）
+    expected_image_indexes = [
+        image_index
+        for case in eligible_cases
+        for image_index in range(len(case.image_hashes))
+    ]
+    if list(plan.image_indexes) != expected_image_indexes:
+        errors.append("execution_plan_count_mismatch")
+    for k in plan.case_keys:
+        if not (len(k) == 64 and all(c in "0123456789abcdef" for c in k)):
+            errors.append("execution_plan_invalid")
+    # duplicate (opaque case key, image index) pair（不同 case key 的相同
+    # image_index 不算 duplicate）
+    seen: set[tuple[str, int]] = set()
+    for i in range(plan.image_count):
+        item = (plan.case_keys[i], plan.image_indexes[i])
+        if item in seen:
+            errors.append("duplicate_execution_item")
+        seen.add(item)
+    # Phase 6.4C2-B1.1：adapter identity binding
+    # （caller 不得任意宣稱 analyzer identity；Failing adapter 無
+    #  analyzer_name/version 屬性 → 亦視為 mismatch）
+    adapter_name = getattr(adapter, "analyzer_name", None)
+    adapter_version = getattr(adapter, "analyzer_version", None)
+    if adapter_name != analyzer_name or adapter_version != analyzer_version \
+            or plan.adapter_name != analyzer_name:
+        errors.append("execution_adapter_identity_mismatch")
+    return errors
+
+
+def execute_external_analyzer_plan(
+    *,
+    plan: ExternalAnalyzerExecutionPlan,
+    eligible_cases: list[EligibleAnalyzerCase],
+    loader: Any,
+    adapter: Any,
+    cache_dir: str | os.PathLike[str],
+    audit_dir: str | os.PathLike[str],
+    allowed_root: str | os.PathLike[str],
+    analyzer_name: str,
+    analyzer_version: str,
+) -> ExternalAnalyzerExecutionSummary:
+    """離線 fake execution engine（Phase 6.4C2-B1）。
+
+    validated plan → memory fake bytes → SHA-256 驗證 → fake adapter →
+    normalized result 驗證 → atomic cache write → atomic audit write →
+    per-image failure containment → deterministic rerun / cache reuse。
+    """
+    from alkaid_cs2.evaluation.analyzer_audit import (
+        AUDIT_SCHEMA_VERSION_V2,
+        hash_image_hashes,
+        validate_audit_manifest,
+        write_audit_manifest,
+    )
+    from alkaid_cs2.evaluation.analyzer_cache import (
+        build_cache_record,
+        compute_analyzer_cache_key,
+        load_analyzer_cache_record,
+        validate_normalized_result,
+        write_analyzer_cache_record,
+    )
+    from alkaid_cs2.evaluation.secure_image_loader import (
+        SecureImageLoadError,
+    )
+
+    # Phase 6.4C2-B1.3：started_at 必須在 preflight 之前產生
+    #（audit 時間涵蓋 preflight）
+    started = _now_utc()
+
+    preflight_errors = _execution_preflight(
+        plan=plan, eligible_cases=eligible_cases, loader=loader,
+        adapter=adapter, cache_dir=cache_dir, audit_dir=audit_dir,
+        allowed_root=allowed_root, analyzer_name=analyzer_name,
+        analyzer_version=analyzer_version)
+
+    # Phase 6.4C2-B1.2/B1.3/B1.4：run_id 統一由 plan 提供；非法 run_id →
+    # 安全 blocked trace ID（不回顯原始值、不當路徑片段、不誤報
+    # audit_write_failed、錯誤碼去重）
+    run_id, run_id_valid = _safe_trace_run_id(plan.run_id)
+    if not run_id_valid:
+        _append_error_once(preflight_errors, "execution_plan_invalid")
+    preflight_errors = _dedupe_errors(preflight_errors)
+    # run_id 非法 → preflight_errors 已含 execution_plan_invalid → 下方 blocked
+
+    def _summary(status, codes, **kw) -> ExternalAnalyzerExecutionSummary:
+        return ExternalAnalyzerExecutionSummary(
+            run_id=run_id, planned_image_count=plan.image_count,
+            processed_image_count=kw.get("processed", 0),
+            attempted_image_count=kw.get("attempted", 0),
+            succeeded_image_count=kw.get("succeeded", 0),
+            failed_image_count=kw.get("failed", 0),
+            cache_hit_count=kw.get("hits", 0),
+            cache_miss_count=kw.get("misses", 0),
+            cache_invalid_count=kw.get("invalid", 0),
+            cache_write_count=kw.get("writes", 0),
+            fixed_error_codes=list(codes), status=status)
+
+    def _write_audit(extra: dict) -> None:
+        audit = {
+            "schema_version": AUDIT_SCHEMA_VERSION_V2,
+            "run_id": run_id,
+            "started_at": started,
+            "completed_at": _now_utc(),  # B1.2：寫入時才產生
+            "dry_run": False,
+            "authorization_flag_present": plan.authorized,
+            "authorization_env_present": True,
+            "eligible_case_count": plan.case_count,
+            "eligible_image_count": plan.image_count,
+            "processed_image_count": extra["processed"],
+            "attempted_image_count": extra["attempted"],
+            "succeeded_image_count": extra["succeeded"],
+            "failed_image_count": extra["failed"],
+            "cache_hit_count": extra["hits"],
+            "cache_miss_count": extra["misses"],
+            "cache_invalid_count": extra["invalid"],
+            "cache_write_count": extra["writes"],
+            "result": extra["result"],
+            "fixed_error_codes": list(extra["codes"]),
+            "image_hash_hashes": hash_image_hashes(plan.expected_hashes),
+            "analyzer_name": analyzer_name,
+            "analyzer_version": analyzer_version,
+        }
+        errors = validate_audit_manifest(audit)
+        if errors:
+            raise ValueError("audit_validation_failed")
+        run_dir = Path(audit_dir) / run_id
+        write_audit_manifest(audit, run_dir)
+
+    if preflight_errors:
+        try:
+            _write_audit({
+                "processed": 0, "attempted": 0, "succeeded": 0, "failed": 0,
+                "hits": 0, "misses": 0, "invalid": 0, "writes": 0,
+                "result": "blocked", "codes": preflight_errors})
+        except Exception:
+            # Phase 6.4C2-B1.1：blocked audit 寫入失敗不得靜默吞掉
+            if "audit_write_failed" not in preflight_errors:
+                preflight_errors.append("audit_write_failed")
+        return _summary("blocked", preflight_errors)
+
+    processed = attempted = succeeded = failed = 0
+    hits = misses = invalid = writes = 0
+    error_codes: list[str] = []
+    idx = 0
+    for case in eligible_cases:
+        for image_idx, (ref, sha) in enumerate(
+                zip(case.storage_references, case.image_hashes)):
+            # case_keys 是 per-image（順序與 flat hashes 一致）
+            opaque_key = plan.case_keys[idx]
+            idx += 1
+            processed += 1
+            cache_key = compute_analyzer_cache_key(
+                opaque_case_key=opaque_key, image_index=image_idx,
+                image_sha256=sha, analyzer_name=analyzer_name,
+                analyzer_version=analyzer_version)
+            record, cache_errs = load_analyzer_cache_record(
+                cache_key, cache_dir, analyzer_name=analyzer_name,
+                analyzer_version=analyzer_version)
+            if record is not None:
+                # cache hit：不呼叫 loader/adapter、不重寫 cache
+                hits += 1
+                succeeded += 1
+                continue
+            if cache_errs:
+                # corrupted cache（Phase 6.4C2-B1.1）：invalid+1、failed+1、
+                # 不呼叫 loader、不呼叫 adapter、不重寫 cache
+                invalid += 1
+                failed += 1
+                for e in cache_errs:
+                    if e not in error_codes:
+                        error_codes.append(e)
+                continue
+            # cache miss：進入 loader path（attempted 在真正呼叫 adapter 前不增加）
+            misses += 1
+            try:
+                image_bytes = loader.load(ref, sha)
+            except SecureImageLoadError as exc:
+                failed += 1
+                # Phase 6.4C2-B1.1：保留固定碼，不把未知錯誤映射成 not_found
+                code = str(exc)
+                mapped = code if code in (
+                    "secure_reference_invalid", "secure_image_not_found",
+                    "secure_image_hash_mismatch") else \
+                    "secure_image_loader_failed"
+                if mapped not in error_codes:
+                    error_codes.append(mapped)
+                continue
+            except Exception:
+                failed += 1
+                if "secure_image_loader_failed" not in error_codes:
+                    error_codes.append("secure_image_loader_failed")
+                continue
+            # 真正呼叫 adapter 前才計 attempted
+            attempted += 1
+            try:
+                result = adapter.analyze_image(
+                    image_bytes, case_key=opaque_key, image_index=image_idx)
+            except Exception:
+                failed += 1
+                if ERROR_ADAPTER_FAILED not in error_codes:
+                    error_codes.append(ERROR_ADAPTER_FAILED)
+                continue
+            result_errors = validate_normalized_result(result)
+            if result_errors:
+                failed += 1
+                if ERROR_RESULT_INVALID not in error_codes:
+                    error_codes.append(ERROR_RESULT_INVALID)
+                continue
+            try:
+                record_data = build_cache_record(
+                    opaque_case_key=opaque_key, image_index=image_idx,
+                    image_sha256=sha, analyzer_name=analyzer_name,
+                    analyzer_version=analyzer_version,
+                    analyzed_at=_now_utc(), normalized_result=result)
+                write_analyzer_cache_record(
+                    record_data, cache_dir, cache_key=cache_key)
+            except Exception:
+                failed += 1
+                if ERROR_CACHE_WRITE not in error_codes:
+                    error_codes.append(ERROR_CACHE_WRITE)
+                continue
+            succeeded += 1
+            writes += 1
+
+    if plan.image_count > 0 and failed == plan.image_count:
+        status = "failed"
+    elif failed == 0:
+        status = "completed"
+    else:
+        status = "completed_with_failures"
+    try:
+        _write_audit({
+            "processed": processed, "attempted": attempted,
+            "succeeded": succeeded, "failed": failed,
+            "hits": hits, "misses": misses, "invalid": invalid,
+            "writes": writes, "result": status, "codes": error_codes})
+    except Exception:
+        # Phase 6.4C2-B1.1：audit 寫入失敗不得靜默吞掉；
+        # 不影響已完成的 cache；summary 含 audit_write_failed
+        if ERROR_AUDIT_WRITE not in error_codes:
+            error_codes.append(ERROR_AUDIT_WRITE)
+        if status == "completed":
+            status = "completed_with_failures"
+    return _summary(status, error_codes, processed=processed,
+                    attempted=attempted, succeeded=succeeded, failed=failed,
+                    hits=hits, misses=misses, invalid=invalid, writes=writes)

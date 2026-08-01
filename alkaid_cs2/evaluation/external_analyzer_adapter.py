@@ -50,15 +50,19 @@ class FakeExternalAnalyzerAdapter:
         case_key: str,
         image_index: int,
     ) -> dict:
+        # Phase 6.4C2-B1：以 digest 數值決定受控輸出（deterministic），
+        # 但不得把 input hash 字串或 bytes 寫入 normalized_result
         digest = hashlib.sha256(image_bytes).hexdigest()
+        digest_int = int(digest, 16)
         return {
             "kind": "image",
             "item_count": 1,
             "items": [{
-                "name": f"fake-item-{digest[:8]}-{image_index}",
-                "wear": "Field-Tested",
+                "name": "fake-item-001",
+                "wear": ("Field-Tested" if digest_int % 2 == 0
+                         else "Minimal Wear"),
                 "currency": "TWD",
-                "price": "1000",
+                "price": str(500 + digest_int % 4500),
                 "image_index": image_index,
             }],
             "warnings": [],
