@@ -42,11 +42,25 @@ _LONG_ID_RE = re.compile(r"\b\d{10,}\b")
 _AUTH_KEYWORD_RE = re.compile(
     r"\b(?:token|cookie|authorization|api[_-]?key|secret|password)\b",
     re.IGNORECASE)
-# Phase 6.4C2-A.8.1：auth_keyword 豁免只限受控 storage reference 欄位
+# Phase 6.4C2-B0.1/B0.2：auth_keyword 豁免只限受控 storage reference 欄位
 STORAGE_REFERENCE_FIELDS = frozenset({
     "original_storage_reference",
     "storage_reference",
     "secure_storage_reference",
+})
+
+# Phase 6.4C2-B0.2：base64 heuristic 豁免只限受控 hash 欄位
+SHA256_EXEMPT_FIELDS = frozenset({
+    "fixture_sha256",
+    "original_image_hashes",
+    "redacted_image_hashes",
+    "reviewer_inputs_hash",
+    "final_ground_truth_hash",
+    "image_sha256",
+    "result_sha256",
+    "image_hash_hashes",
+    "expected_hashes",
+    "opaque_case_key",
 })
 _BASE64_RE = re.compile(
     r"data:image/[a-z0-9.+-]+;base64,|"
@@ -82,6 +96,27 @@ def _is_valid_storage_reference_field(field: str, value: str) -> bool:
     )
 
 
+def _is_controlled_sha256_field(field: str, value: Any) -> bool:
+    """base64 豁免判定（Phase 6.4C2-B0.2）：
+
+    - nested path 最後欄位名在 SHA256_EXEMPT_FIELDS
+    - str 且匹配 ^[0-9a-f]{64}$
+    - list 欄位：全部元素合法才豁免
+    自由文字（notes/metadata/payload/warning/description/arbitrary_field）
+    即使內容是 64 位小寫 hex 也不豁免。
+    """
+    field_name = field.rsplit(".", 1)[-1]
+    field_name = field_name.split("[", 1)[0].lower()
+    if field_name not in SHA256_EXEMPT_FIELDS:
+        return False
+    if isinstance(value, str):
+        return bool(_SHA256_RE.match(value))
+    if isinstance(value, list):
+        return bool(value) and all(
+            isinstance(v, str) and _SHA256_RE.match(v) for v in value)
+    return False
+
+
 def _scan_string(value: str, field: str, findings: list[RedactionFinding]) -> None:
     if not value:
         return
@@ -101,18 +136,16 @@ def _scan_string(value: str, field: str, findings: list[RedactionFinding]) -> No
     is_valid_storage_ref = _is_valid_storage_reference_field(field, value)
     if _AUTH_KEYWORD_RE.search(value) and not is_valid_storage_ref:
         findings.append(RedactionFinding("auth_keyword", field))
-    if _BASE64_RE.search(value) and "base64" not in field.lower():
+    # Phase 6.4C2-B0.2：base64 豁免只限受控 hash 欄位（非全域 64-hex 跳過）
+    if _BASE64_RE.search(value) and "base64" not in field.lower() \
+            and not _is_controlled_sha256_field(field, value):
         findings.append(RedactionFinding("base64_like", field))
     if _LOCAL_PATH_RE.search(value):
         findings.append(RedactionFinding("local_path", field))
 
 
-# Phase 6.4C2-A.3：這些 hash 欄位由專用 SHA-256 validator 驗證，
-# generic base64 heuristic 不得誤判
-_SHA256_EXEMPT_FIELDS = frozenset({
-    "fixture_sha256", "original_image_hashes", "redacted_image_hashes",
-    "reviewer_inputs_hash", "final_ground_truth_hash",
-})
+# Phase 6.4C2-B0.2：統一由 _is_controlled_sha256_field 處理（只豁免 base64；
+# email/phone/http/path/auth 等規則照常執行）
 
 
 def _scan_value(value: Any, field: str, findings: list[RedactionFinding],
@@ -133,18 +166,9 @@ def _scan_value(value: Any, field: str, findings: list[RedactionFinding],
             if kl in _PRIVATE_KEYS:
                 findings.append(RedactionFinding("private_key", path))
                 continue
-            # Phase 6.4C2-A.3：SHA-256 欄位跳過 generic base64 heuristic
-            if kl in _SHA256_EXEMPT_FIELDS:
-                if isinstance(v, str) and _SHA256_RE.match(v):
-                    continue  # 合法 hash → 豁免
             _scan_value(v, path, findings, depth + 1)
     elif isinstance(value, list):
-        # Phase 6.4C2-A.3：SHA-256 欄位的 list（original_image_hashes 等）豁免
-        last_seg = (field.rsplit(".", 1)[-1].split("[", 1)[0]
-                    if field else "")
-        if last_seg in _SHA256_EXEMPT_FIELDS:
-            if all(isinstance(v, str) and _SHA256_RE.match(v) for v in value):
-                return  # 合法 hash list → 豁免 base64 heuristic
+        # Phase 6.4C2-B0.2：list 元素的 base64 豁免由 _scan_string 依欄位名處理
         for i, v in enumerate(value):
             _scan_value(v, f"{field}[{i}]", findings, depth + 1)
     elif isinstance(value, bytes):

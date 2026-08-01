@@ -22,3 +22,6 @@ analyze_arbitrage_backup.py
 
 # Git
 .git/
+
+# Phase 6.4C2-B0: analyzer 結果與 audit（Git 外）
+local_data/

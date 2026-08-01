@@ -3,7 +3,7 @@
 - case 數：50
 - safe expected true：32 / raw safe true：15 / raw safe false：13 / raw safe None：22
 - multi-image：14 / multi-item：9
-- git commit：e026f7ab7dc50fb5fbf7d548f2b1fbbe2d36ffa6
+- git commit：004bfcad8114363c956e73cc11af4491f2310e40
 - readiness：**SHADOW_READY**
 
 - readiness reasons：insufficient_eligible_cases, no_real_cases_ingested, real_analyzer_not_run
@@ -68,7 +68,7 @@
 - raw conflict detection：N/A
 - fallback to text_v2：0.00%
 - fallback to skipped：0.00%
-- avg latency：0.3ms / P50：0.3ms / P95：0.3ms
+- avg latency：0.4ms / P50：0.4ms / P95：0.4ms
 - avg image count：0.0 / avg retry：0.0
 - blocked rate：20.83%
 
@@ -96,7 +96,7 @@
 - raw conflict detection：N/A
 - fallback to text_v2：0.00%
 - fallback to skipped：43.75%
-- avg latency：1.3ms / P50：1.3ms / P95：1.7ms
+- avg latency：1.2ms / P50：1.2ms / P95：1.4ms
 - avg image count：1.23 / avg retry：0.0
 - blocked rate：43.75%
 
@@ -126,7 +126,7 @@
 - raw conflict detection：75.00%
 - fallback to text_v2：0.00%
 - fallback to skipped：0.00%
-- avg latency：1.7ms / P50：1.6ms / P95：2.3ms
+- avg latency：1.6ms / P50：1.5ms / P95：2.0ms
 - avg image count：1.23 / avg retry：0.0
 - blocked rate：45.83%
 
@@ -154,7 +154,7 @@
 - raw conflict detection：N/A
 - fallback to text_v2：33.33%
 - fallback to skipped：43.75%
-- avg latency：2.7ms / P50：2.8ms / P95：3.6ms
+- avg latency：2.9ms / P50：2.8ms / P95：4.2ms
 - avg image count：1.23 / avg retry：0.0
 - blocked rate：43.75%
 
