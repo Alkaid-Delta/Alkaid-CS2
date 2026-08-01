@@ -366,6 +366,38 @@ def _wear_to_en(text: str) -> str:
     return "Field-Tested"  # 預設
 
 
+# ============================================================
+# V2 bridge 用武器對照（與 extract_skin_info 內部 weapon_map 相同，供 Phase 6.2 bridge 使用）
+# ============================================================
+_V2_WEAPON_MAP = {
+    "AK-47": "AK-47", "ak": "AK-47", "阿卡": "AK-47",
+    "M4A1-S": "M4A1-S", "M4A4": "M4A4", "沙鹰": "Desert Eagle", "沙鷹": "Desert Eagle",
+    "蝴蝶刀": "Butterfly Knife", "爪子刀": "Karambit", "爪刀": "Karambit",
+    "刺刀": "Bayonet", "折刀": "Flip Knife", "锯齿爪刀": "Huntsman Knife",
+    "穿肠刀": "Gut Knife", "猎刀": "Huntsman Knife",
+    "猎杀者": "Huntsman Knife", "系绳者": "Talon Knife", "穿刺者": "Stiletto Knife",
+    "求生匕首": "Survival Knife", "流浪者": "Nomad Knife", "骷髅匕首": "Skeleton Knife",
+    "运动手套": "Sport Gloves", "專業手套": "Specialist Gloves",
+    "专业手套": "Specialist Gloves", "驾驶手套": "Driver Gloves", "駕駛手套": "Driver Gloves",
+    "摩托手套": "Moto Gloves", "手部束带": "Hand Wraps", "手部束帶": "Hand Wraps",
+    "血猎手套": "Bloodhound Gloves", "血獵手套": "Bloodhound Gloves",
+    "裹手": "Hand Wraps", "沙漠之鹰": "Desert Eagle",
+}
+
+
+def _load_v2_dicts() -> tuple[dict, dict]:
+    """載入 skin_dict.json 的 full / pattern 字典供 V2 bridge 使用。"""
+    dict_path = os.path.join(BASE_DIR, "skin_dict.json")
+    if os.path.exists(dict_path):
+        with open(dict_path, "r", encoding="utf-8") as f:
+            dict_data = json.load(f)
+        return (
+            dict_data.get("full_cn_to_en", {}),
+            dict_data.get("pattern_cn_to_en", {}),
+        )
+    return {}, {}
+
+
 def extract_skin_info(post_text: str) -> dict | None:
     # 先查對照表
     import os, json as _json
@@ -828,22 +860,66 @@ def process_posts(posts: list[dict]) -> list[dict]:
         print(f"\n{'─' * 50}")
         print(f"[{i}/{len(posts)}] {post.get('author', '未知')}")
 
-        # Step 1
-        print("  [1/3] DeepSeek 提取皮膚...")
-        info = extract_skin_info(post.get("content", ""))
-        if info is None:
-            processed_ids.append(post.get("id", ""))
-            continue
-        mh, sp, conf = info.get("market_hash_name", ""), info.get("seller_price", -1), info.get("confidence", "low")
-        # 圖片來源的 RMB 價格 → 轉成 TWD（×4.5）
-        if sp > 0 and post.get("currency") == "RMB":
-            sp = round(sp * 4.5)
-        if sp <= 0:
-            print("  [1/3] ⚠️ 無價格,跳過")
-            processed_ids.append(post.get("id", ""))
-            continue
-        print(f"  [1/3] ✅ {mh} | NT${sp:,.0f} | {conf}")
-        post["_seller_price"] = sp
+        # Step 1（V2 受控整合：off 完全 legacy，其餘模式走 production_bridge）
+        from alkaid_cs2.integration.production_bridge import (
+            _METRICS,
+            get_v2_parser_mode,
+            is_valid_legacy_seller_price,
+            parse_post_for_production,
+        )
+        mode = get_v2_parser_mode()
+        if mode == "off":
+            print("  [1/3] DeepSeek 提取皮膚...")
+            info = extract_skin_info(post.get("content", ""))
+            if info is None:
+                processed_ids.append(post.get("id", ""))
+                continue
+            mh, sp, conf = info.get("market_hash_name", ""), info.get("seller_price", -1), info.get("confidence", "low")
+            # 圖片來源的 RMB 價格 → 轉成 TWD（×4.5）
+            if sp > 0 and post.get("currency") == "RMB":
+                sp = round(sp * 4.5)
+            if sp <= 0:
+                print("  [1/3] ⚠️ 無價格,跳過")
+                processed_ids.append(post.get("id", ""))
+                continue
+            print(f"  [1/3] ✅ {mh} | NT${sp:,.0f} | {conf}")
+            post["_seller_price"] = sp
+        else:
+            full_v2, pattern_v2 = _load_v2_dicts()
+            result = parse_post_for_production(
+                post_id=post.get("id", ""),
+                author=post.get("author", ""),
+                link=post.get("url", ""),
+                post_text=post.get("content", ""),
+                image_urls=post.get("images", []) or [],
+                full_dict=full_v2,
+                pattern_dict=pattern_v2,
+                weapon_map=_V2_WEAPON_MAP,
+                legacy_parser=extract_skin_info,
+                mode=mode,
+            )
+            _METRICS.record(result)
+            if result.blocked or result.data is None:
+                print(f"  [1/3] ⏭️ skipped ({result.source})")
+                processed_ids.append(post.get("id", ""))
+                continue
+            data = result.data
+            mh = data.get("market_hash_name", "")
+            sp = data.get("seller_price", -1)
+            conf = data.get("confidence", "low")
+            if result.source == "v2":
+                # V2 已保證 TWD（adapter 只輸出 TWD），不得再次 ×4.5
+                pass
+            else:
+                # legacy / shadow_legacy：保留原 RMB 轉換行為
+                if is_valid_legacy_seller_price(sp) and post.get("currency") == "RMB":
+                    sp = round(sp * 4.5)
+            if not is_valid_legacy_seller_price(sp):
+                print("  [1/3] ⚠️ 無有效價格,跳過")
+                processed_ids.append(post.get("id", ""))
+                continue
+            print(f"  [1/3] ✅ [{result.source}] {mh} | NT${sp:,.0f} | {conf}")
+            post["_seller_price"] = sp
 
         # Step 2
         print("  [2/3] 查詢 BUFF 價格...")
