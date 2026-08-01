@@ -1,0 +1,31 @@
+{
+  "post": {
+    "id": "p4",
+    "author": "測試",
+    "url": "https://fb.com/4",
+    "content": "售 紅線",
+    "images": [
+      "https://img/bad.jpg",
+      "https://img/good.jpg"
+    ]
+  },
+  "vision_responses": {
+    "type": [
+      null,
+      {
+        "type": "single"
+      }
+    ],
+    "items": [
+      [],
+      [
+        {
+          "name": "AK-47 | 红线",
+          "wear": "久经沙场",
+          "price": 5000,
+          "currency": "TWD"
+        }
+      ]
+    ]
+  }
+}

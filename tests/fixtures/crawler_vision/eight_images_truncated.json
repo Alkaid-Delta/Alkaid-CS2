@@ -1,0 +1,96 @@
+{
+  "post": {
+    "id": "p9",
+    "author": "測試",
+    "url": "https://fb.com/9",
+    "content": "售 紅線",
+    "images": [
+      "https://img/0.jpg",
+      "https://img/1.jpg",
+      "https://img/2.jpg",
+      "https://img/3.jpg",
+      "https://img/4.jpg",
+      "https://img/5.jpg",
+      "https://img/6.jpg",
+      "https://img/7.jpg"
+    ]
+  },
+  "vision_responses": {
+    "type": [
+      {
+        "type": "single"
+      },
+      {
+        "type": "single"
+      },
+      {
+        "type": "single"
+      },
+      {
+        "type": "single"
+      },
+      {
+        "type": "single"
+      },
+      {
+        "type": "single"
+      },
+      {
+        "type": "single"
+      },
+      {
+        "type": "single"
+      }
+    ],
+    "items": [
+      [
+        {
+          "name": "Skin 0",
+          "price": 1000
+        }
+      ],
+      [
+        {
+          "name": "Skin 1",
+          "price": 1001
+        }
+      ],
+      [
+        {
+          "name": "Skin 2",
+          "price": 1002
+        }
+      ],
+      [
+        {
+          "name": "Skin 3",
+          "price": 1003
+        }
+      ],
+      [
+        {
+          "name": "Skin 4",
+          "price": 1004
+        }
+      ],
+      [
+        {
+          "name": "Skin 5",
+          "price": 1005
+        }
+      ],
+      [
+        {
+          "name": "Skin 6",
+          "price": 1006
+        }
+      ],
+      [
+        {
+          "name": "Skin 7",
+          "price": 1007
+        }
+      ]
+    ]
+  }
+}

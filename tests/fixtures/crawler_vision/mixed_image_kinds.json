@@ -1,0 +1,54 @@
+{
+  "post": {
+    "id": "p5",
+    "author": "測試",
+    "url": "https://fb.com/5",
+    "content": "售 紅線",
+    "images": [
+      "https://img/inv.jpg",
+      "https://img/single.jpg",
+      "https://img/market.jpg",
+      "https://img/inspect.jpg"
+    ]
+  },
+  "vision_responses": {
+    "type": [
+      {
+        "type": "inventory",
+        "rows": 3,
+        "cols": 7
+      },
+      {
+        "type": "single"
+      },
+      {
+        "type": "market_listing"
+      },
+      {
+        "type": "inspect_screenshot"
+      }
+    ],
+    "items": [
+      [],
+      [
+        {
+          "name": "AK-47 | 红线",
+          "price": 5000
+        }
+      ],
+      [
+        {
+          "name": "AK-47 | 红线",
+          "price": 4300,
+          "currency": "RMB"
+        }
+      ],
+      [
+        {
+          "name": "沙漠之鹰 | 东方之谜",
+          "price": null
+        }
+      ]
+    ]
+  }
+}

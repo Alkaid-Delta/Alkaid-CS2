@@ -1,0 +1,38 @@
+{
+  "post": {
+    "id": "p7",
+    "author": "測試",
+    "url": "https://fb.com/7",
+    "content": "售 紅線",
+    "images": [
+      "https://img/twd.jpg",
+      "https://img/rmb.jpg"
+    ]
+  },
+  "vision_responses": {
+    "type": [
+      {
+        "type": "single"
+      },
+      {
+        "type": "single"
+      }
+    ],
+    "items": [
+      [
+        {
+          "name": "AK-47 | 红线",
+          "price": 5000,
+          "currency": "TWD"
+        }
+      ],
+      [
+        {
+          "name": "AK-47 | 红线",
+          "price": 4300,
+          "currency": "RMB"
+        }
+      ]
+    ]
+  }
+}

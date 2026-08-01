@@ -1,0 +1,22 @@
+{
+  "post": {
+    "id": "p8",
+    "author": "測試",
+    "url": "https://fb.com/8",
+    "content": "售 紅線 算5000",
+    "images": [
+      "https://img/bad1.jpg",
+      "https://img/bad2.jpg"
+    ]
+  },
+  "vision_responses": {
+    "type": [
+      null,
+      null
+    ],
+    "items": [
+      [],
+      []
+    ]
+  }
+}

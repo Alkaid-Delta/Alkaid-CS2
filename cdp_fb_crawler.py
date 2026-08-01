@@ -284,7 +284,8 @@ def fetch_posts(max_scrolls=50, max_posts=15):
                                 dom_text[:15] in api_text or api_text[:15] in dom_text
                             ):
                                 if dp.get('images'):
-                                    p['images'] = dp['images'][:3]
+                                    # 保留完整 DOM 圖片清單（最多圖片數由 analyze_post_images 統一限制）
+                                    p['images'] = list(dp['images'])
                                 if dp.get('text') and len(dp['text']) > len(p.get('text','')):
                                     p['alt_text'] = dp['text']
                                 break
@@ -301,127 +302,72 @@ def fetch_posts(max_scrolls=50, max_posts=15):
         print(f" {len(all_posts)} 篇")
 
         # ── 圖片優先：每張圖獨立分析，各自綁定名稱/磨損/價格（互不污染）──
+        # Phase 6.3D：不再「第一張成功就 break」——所有圖片依序獨立分析
+        from alkaid_cs2.integration.crawler_vision import (
+            CRAWLER_VISION_METRICS,
+            analyze_post_images,
+            apply_dom_extended_text,
+            build_crawler_output_post,
+            build_post_vision_fields,
+            download_fb_image,
+            get_max_vision_images_per_post,
+            get_vision_continue_on_error,
+            get_vision_image_timeout_seconds,
+        )
+
         for p in all_posts:
             if not p['images']:
                 continue
             # 每張圖的結果獨立存到 items，不塞進文字
             p['items'] = []
 
-            # 如果 FB 已 OCR 圖片 alt text，直接用它（不用 Vision，省成本）
-            alt_text = p.get('alt_text', '')
-            if alt_text:
-                p['text'] = f"[圖片] {alt_text[:200]}"
-                print(f"  [FB] 🖼️ 圖片 alt: {alt_text[:80]}")
-                continue
+            # DOM 延伸文字（原 alt_text 欄位）：保留原文、不覆蓋 text、照常處理圖片
+            if apply_dom_extended_text(p):
+                print(f"  [FB] 🖼️ DOM 延伸文字: {p['dom_extended_text'][:80]}")
 
-            # 否則用 Vision 讀圖（先判斷類型：庫存列表→切格子 / 單一物品→整圖）
+            # 用 Vision 讀圖（多張圖片全部處理，單張失敗不中止整篇）
             try:
-                import requests as _req
                 import vision_analyzer as va
                 if not os.environ.get("OPENROUTER_API_KEY"):
                     os.environ["OPENROUTER_API_KEY"] = _get_cfg("OPENROUTER_API_KEY", "")
 
-                for img_url in p['images'][:3]:  # 每張圖獨立處理
-                    resp = _req.get(img_url, timeout=15)
-                    if resp.status_code != 200:
-                        continue
+                max_imgs = get_max_vision_images_per_post()
+                timeout_s = get_vision_image_timeout_seconds()
+                continue_on_error = get_vision_continue_on_error()
 
-                    # ── Step 1: 判斷圖片類型 ──
-                    type_result = va.analyze_image(
-                        resp.content,
-                        custom_prompt=(
-                            "判斷這張 CS2 截圖類型，只回傳 JSON:"
-                            '{"type":"inventory"或"single"或"other",'
-                            '"rows":數字,"cols":數字}'
-                            "inventory=多物品庫存列表(有格子), rows/cols=格子數(如3列7行)"
-                            "single=單一物品詳情頁/Steam頁/遊戲內檢視"
-                        ),
-                        retry=1
-                    )
-                    if type_result and isinstance(type_result, dict):
-                        img_type = type_result.get('type', 'other')
-                        rows = int(type_result.get('rows') or 7)
-                        cols = int(type_result.get('cols') or 3)
-                    else:
-                        img_type = 'single'
-                        rows, cols = 7, 3
+                vision_results = analyze_post_images(
+                    p['images'],
+                    download_image_func=download_fb_image,
+                    analyze_image_func=va.analyze_image,
+                    max_images=max_imgs,
+                    timeout_seconds=timeout_s,
+                    continue_on_error=continue_on_error,
+                    metrics=CRAWLER_VISION_METRICS,
+                )
 
-                    # ── Step 2: 依類型分流 ──
-                    if img_type == 'inventory':
-                        # 庫存列表 → 無法可靠辨識(手繪勾/多物品)，直接跳過（規則:不勉強）
-                        print(f"  [FB] 🖼️ 庫存列表圖,跳過(無法可靠辨識)")
-                        continue
-                    else:
-                        # 單一物品頁 → 整圖讀取
-                        result = va.analyze_image(
-                            resp.content,
-                            custom_prompt=(
-                                "CS2交易截圖.提取要賣的物品,輸出JSON陣列:"
-                                '[{"name":"完整中文名含★","wear":"磨損度","price":數字,"currency":"TWD/RMB"}]'
-                                "單一物品頁就是那件.無法辨識回傳[]"
-                            ),
-                            retry=1
-                        )
-                        if result and isinstance(result, list) and len(result) > 0:
-                            items = result
-                        elif result and isinstance(result, dict):
-                            items = [result]
-                        else:
-                            items = []
+                fields = build_post_vision_fields(vision_results)
+                p['vision_inputs'] = fields["vision_inputs"]
+                p['vision_payloads'] = fields["vision_payloads"]
+                if fields["legacy_items"]:
+                    p['items'] = fields["legacy_items"]
+                if fields["currency"]:
+                    p['currency'] = fields["currency"]
 
-                        for item in items:
-                            cn = item.get('chinese_name', item.get('name', ''))
-                            wear = item.get('wear', '')
-                            price = item.get('price', 0)
-                            cur = item.get('currency', 'RMB')
-                            st = "StatTrak " if item.get('stattrak') else ""
-                            if cn:
-                                p['items'].append({
-                                    "name": f"{st}{cn}",
-                                    "wear": wear,
-                                    "price": price,
-                                    "currency": cur,
-                                })
-
-                    if p['items']:
-                        n = len(p['items'])
-                        print(f"  [FB] 🖼️ 圖片: {n} 件物品 (第一件: {p['items'][0]['name'][:40]})")
-                        break  # 讀到一張圖的結果就夠了
+                succ = sum(1 for r in vision_results if r.success)
+                for r in vision_results:
+                    status = f"success {r.duration_ms:.0f}ms" if r.success else f"{r.error_code}"
+                    print(f"  [FB] 🖼️ 圖片 {r.image_index + 1}/{len(p['images'])}：{status}")
+                print(f"  [FB] 🖼️ 貼文完成：{succ} success / {len(vision_results) - succ} failed")
             except ImportError:
                 pass
-            except Exception as e:
+            except (ValueError, TypeError, TimeoutError, ConnectionError) as e:
                 print(f"  [FB] ⚠️ Vision 錯誤: {e}")
 
         browser.close()
 
     # ── 轉換成標準輸出格式 ──
-    # 每張圖的每個物品 = 獨立一筆候選（解決多物品貼文）
-    results = []
-    for i, p in enumerate(all_posts[:max_posts]):
-        items = p.get('items') or []
-        if items:
-            # 多物品：每件獨立成一筆，共用作者/連結
-            for j, item in enumerate(items):
-                skin_text = f"[圖片] 售 {item['name']} {item['wear']}"
-                price = item.get('price')
-                cur = item.get('currency', 'RMB')
-                if price:
-                    # 圖上 RMB 價格 → 標記讓下游轉 TWD
-                    skin_text += f" {price}{cur}"
-                results.append({
-                    "id": f"p{i}_item{j}",
-                    "author": p['author'],
-                    "content": skin_text,
-                    "link": p['url'] or "https://www.facebook.com/groups/allinunderdog",
-                    "currency": cur,  # 標記貨幣，analyze_arbitrage 會轉換
-                })
-        else:
-            results.append({
-                "id": f"p{i}",
-                "author": p['author'],
-                "content": p['text'],
-                "link": p['url'] or "https://www.facebook.com/groups/allinunderdog"
-            })
+    # Phase 6.3D.1：每篇 Facebook 原貼文只輸出一筆結果（不拆成多篇 synthetic posts）
+    results = [build_crawler_output_post(p) for p in all_posts[:max_posts]]
 
-    print(f"  [FB] ✅ {len(results)} 筆（含多物品拆分）")
+    print(f"  [FB] ✅ {len(results)} 筆（一篇貼文一筆）")
     return results

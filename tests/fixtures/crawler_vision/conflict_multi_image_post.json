@@ -1,0 +1,40 @@
+{
+  "post": {
+    "id": "p11",
+    "author": "測試",
+    "url": "https://fb.com/11",
+    "content": "售 AK-47 | 红线 久经沙场 算5000",
+    "images": [
+      "https://img/0.jpg",
+      "https://img/1.jpg"
+    ]
+  },
+  "vision_responses": {
+    "type": [
+      {
+        "type": "single"
+      },
+      {
+        "type": "single"
+      }
+    ],
+    "items": [
+      [
+        {
+          "name": "AK-47 | 红线",
+          "wear": "久经沙场",
+          "price": 5000,
+          "currency": "TWD"
+        }
+      ],
+      [
+        {
+          "name": "AK-47 | 红线",
+          "wear": "久经沙场",
+          "price": 5500,
+          "currency": "TWD"
+        }
+      ]
+    ]
+  }
+}
