@@ -1,0 +1,17 @@
+{
+  "type": "inventory",
+  "rows": 3,
+  "cols": 7,
+  "items": [
+    {
+      "chinese_name": "AK-47 | 红线",
+      "price": null,
+      "confidence": 0.6
+    },
+    {
+      "chinese_name": "蝴蝶刀 | 虎牙",
+      "price": null,
+      "confidence": 0.6
+    }
+  ]
+}

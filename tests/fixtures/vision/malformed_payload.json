@@ -1,0 +1,15 @@
+{
+  "items": [
+    {
+      "chinese_name": "AK-47 | 红线",
+      "wear": "久经沙场",
+      "price": 5000
+    },
+    "not-a-dict-item",
+    {
+      "chinese_name": "AWP | 巨龙传说",
+      "price": "not-a-number",
+      "confidence": 0.9
+    }
+  ]
+}

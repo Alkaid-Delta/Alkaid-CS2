@@ -1,0 +1,14 @@
+{
+  "type": "market",
+  "platform": "steam",
+  "items": [
+    {
+      "chinese_name": "蝴蝶刀 | 渐变之色",
+      "wear": "崭新出厂",
+      "price": 320,
+      "currency": "USD",
+      "confidence": 0.8,
+      "evidence": "Steam 起始價 $320"
+    }
+  ]
+}

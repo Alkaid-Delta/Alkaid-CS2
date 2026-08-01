@@ -1,0 +1,14 @@
+{
+  "type": "market",
+  "platform": "buff",
+  "items": [
+    {
+      "chinese_name": "AK-47 | 红线",
+      "wear": "久经沙场",
+      "price": 543,
+      "currency": "RMB",
+      "confidence": 0.8,
+      "evidence": "BUFF 掛牌價 543"
+    }
+  ]
+}

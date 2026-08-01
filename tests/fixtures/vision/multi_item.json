@@ -1,0 +1,18 @@
+[
+  {
+    "chinese_name": "AK-47 | 红线",
+    "wear": "久经沙场",
+    "price": 7480,
+    "currency": "TWD",
+    "confidence": 0.85,
+    "evidence": "红线 7480"
+  },
+  {
+    "chinese_name": "AK-47 | 火神",
+    "wear": "久经沙场",
+    "price": 14000,
+    "currency": "TWD",
+    "confidence": 0.85,
+    "evidence": "火神 14000"
+  }
+]

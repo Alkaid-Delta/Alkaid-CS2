@@ -1,0 +1,13 @@
+{
+  "type": "chat",
+  "items": [
+    {
+      "chinese_name": "AK-47 | 红线",
+      "wear": "久经沙场",
+      "price": 5000,
+      "currency": "TWD",
+      "confidence": 0.75,
+      "evidence": "賣家: 算5000 可談"
+    }
+  ]
+}

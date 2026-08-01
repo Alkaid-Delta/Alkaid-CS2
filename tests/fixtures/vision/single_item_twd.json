@@ -1,0 +1,14 @@
+{
+  "type": "single",
+  "items": [
+    {
+      "chinese_name": "AK-47 | 红线",
+      "wear": "久经沙场",
+      "price": 5000,
+      "currency": "TWD",
+      "stattrak": false,
+      "confidence": 0.9,
+      "evidence": "售 AK-47 | 红线 久经沙场 5000"
+    }
+  ]
+}
