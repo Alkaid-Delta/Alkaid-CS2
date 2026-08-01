@@ -3,10 +3,10 @@
 - case 數：50
 - safe expected true：32 / raw safe true：15 / raw safe false：13 / raw safe None：22
 - multi-image：14 / multi-item：9
-- git commit：5dcac837e6d9ae814ec1924ceafbe8b5b0159cf1
+- git commit：e026f7ab7dc50fb5fbf7d548f2b1fbbe2d36ffa6
 - readiness：**SHADOW_READY**
 
-- readiness reasons：insufficient_eligible_cases, insufficient_real_case_count, insufficient_double_reviewed_real
+- readiness reasons：insufficient_eligible_cases, no_real_cases_ingested, real_analyzer_not_run
 
 ## Dataset Quality
 - total_loaded_cases：50
@@ -96,7 +96,7 @@
 - raw conflict detection：N/A
 - fallback to text_v2：0.00%
 - fallback to skipped：43.75%
-- avg latency：1.5ms / P50：1.4ms / P95：2.1ms
+- avg latency：1.3ms / P50：1.3ms / P95：1.7ms
 - avg image count：1.23 / avg retry：0.0
 - blocked rate：43.75%
 
@@ -126,7 +126,7 @@
 - raw conflict detection：75.00%
 - fallback to text_v2：0.00%
 - fallback to skipped：0.00%
-- avg latency：1.8ms / P50：1.8ms / P95：2.5ms
+- avg latency：1.7ms / P50：1.6ms / P95：2.3ms
 - avg image count：1.23 / avg retry：0.0
 - blocked rate：45.83%
 
@@ -154,7 +154,7 @@
 - raw conflict detection：N/A
 - fallback to text_v2：33.33%
 - fallback to skipped：43.75%
-- avg latency：3.3ms / P50：3.4ms / P95：4.7ms
+- avg latency：2.7ms / P50：2.8ms / P95：3.6ms
 - avg image count：1.23 / avg retry：0.0
 - blocked rate：43.75%
 

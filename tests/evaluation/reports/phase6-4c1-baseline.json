@@ -84,6 +84,7 @@
     "fixture_only_cases": 6
   },
   "real_data_validation_status": "insufficient",
+  "intake_ready": null,
   "fixture_vs_analyzer": {
     "cases_compared": 14,
     "images_compared": 18,
@@ -214,9 +215,9 @@
         "currency_accuracy": 1.0,
         "wear_accuracy": 0.9565217391304348,
         "linking_accuracy": 1.0,
-        "average_latency_ms": 1.5,
-        "p50_latency_ms": 1.4,
-        "p95_latency_ms": 2.1,
+        "average_latency_ms": 1.3,
+        "p50_latency_ms": 1.3,
+        "p95_latency_ms": 1.7,
         "average_image_count": 1.23,
         "average_retry_count": 0.0,
         "blocked_rate": 0.4375,
@@ -269,9 +270,9 @@
         "currency_accuracy": 1.0,
         "wear_accuracy": 0.95,
         "linking_accuracy": 0.9523809523809523,
-        "average_latency_ms": 1.8,
-        "p50_latency_ms": 1.8,
-        "p95_latency_ms": 2.5,
+        "average_latency_ms": 1.7,
+        "p50_latency_ms": 1.6,
+        "p95_latency_ms": 2.3,
         "average_image_count": 1.23,
         "average_retry_count": 0.0,
         "blocked_rate": 0.4583333333333333,
@@ -315,9 +316,9 @@
         "currency_accuracy": 1.0,
         "wear_accuracy": 0.9565217391304348,
         "linking_accuracy": 1.0,
-        "average_latency_ms": 3.3,
-        "p50_latency_ms": 3.4,
-        "p95_latency_ms": 4.7,
+        "average_latency_ms": 2.7,
+        "p50_latency_ms": 2.8,
+        "p95_latency_ms": 3.6,
         "average_image_count": 1.23,
         "average_retry_count": 0.0,
         "blocked_rate": 0.4375,
@@ -354,8 +355,8 @@
   },
   "readiness_reasons": [
     "insufficient_eligible_cases",
-    "insufficient_real_case_count",
-    "insufficient_double_reviewed_real"
+    "no_real_cases_ingested",
+    "real_analyzer_not_run"
   ],
   "top_warning_codes": [
     [
@@ -5893,5 +5894,5 @@
       ]
     }
   ],
-  "git_commit": "5dcac837e6d9ae814ec1924ceafbe8b5b0159cf1"
+  "git_commit": "e026f7ab7dc50fb5fbf7d548f2b1fbbe2d36ffa6"
 }

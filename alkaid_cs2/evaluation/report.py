@@ -333,8 +333,9 @@ def _compute_readiness(cases: list[EvaluationCase],
 
 
 def _readiness_reasons(cases: list[EvaluationCase], safe_matrix: dict,
-                       parser_stats: dict, crash_count: int) -> list[str]:
-    """readiness reason codes（Phase 6.4C1）。"""
+                       parser_stats: dict, crash_count: int,
+                       intake_ready: bool | None = None) -> list[str]:
+    """readiness reason codes（Phase 6.4C1 / 6.4C2-A.2）。"""
     from alkaid_cs2.evaluation.models import (  # noqa: E402
         EvaluationSource, GroundTruthReviewStatus,
     )
@@ -349,10 +350,18 @@ def _readiness_reasons(cases: list[EvaluationCase], safe_matrix: dict,
     real_double = sum(1 for c in cases
                       if c.source == EvaluationSource.ANONYMIZED_REAL and
                       c.ground_truth_review_status == GroundTruthReviewStatus.DOUBLE_REVIEW)
-    if real_total < 20:
-        reasons.append("insufficient_real_case_count")
-    if real_double < 15:
-        reasons.append("insufficient_double_reviewed_real")
+    if real_total == 0:
+        # Phase 6.4C2-A：intake 流程可用 ≠ validation 完成
+        reasons.append("no_real_cases_ingested")
+        reasons.append("real_analyzer_not_run")
+        # Phase 6.4C2-A.2：只有 intake_ready is True 才宣稱流程可用
+        if intake_ready is True:
+            reasons.append("real_dataset_intake_ready")
+    else:
+        if real_total < 20:
+            reasons.append("insufficient_real_case_count")
+        if real_double < 15:
+            reasons.append("no_double_reviewed_real_cases")
     if parser_stats.get("seller_price_false_positive_denominator", 0) <= 0:
         reasons.append("seller_fp_denominator_zero")
     if safe_matrix.get("safe_false_positive_rate", 1.0) > 0.01:
@@ -373,6 +382,7 @@ def generate_evaluation_report(
     privacy_findings: list | None = None,
     fixture_vs_analyzer: dict | None = None,
     analyzer_coverage: dict | None = None,
+    intake_ready: bool | None = None,
 ) -> dict[str, object]:
     report: dict[str, object] = {
         "dataset": {
@@ -394,6 +404,7 @@ def generate_evaluation_report(
             evaluated_count=len(results.get("vision_production", [])),
             analyzer_coverage=analyzer_coverage),
         "real_data_validation_status": "insufficient",  # 佔位；稍後以含 coverage 版本覆寫
+        "intake_ready": intake_ready,  # None=未驗證；只表示 workflow 可用，不表示 production ready
         "fixture_vs_analyzer": fixture_vs_analyzer or {},
         "parsers": {},
         "readiness": READINESS_NOT_READY,
@@ -453,7 +464,8 @@ def generate_evaluation_report(
         cases, report["parsers"]["vision_production"]["safe"], vis, crash_count,
         real_data_validation_status=real_status)
     report["readiness_reasons"] = _readiness_reasons(
-        cases, report["parsers"]["vision_production"]["safe"], vis, crash_count)
+        cases, report["parsers"]["vision_production"]["safe"], vis, crash_count,
+        intake_ready=intake_ready)
 
     all_w = warnings_seen or []
     wc: dict[str, int] = {}

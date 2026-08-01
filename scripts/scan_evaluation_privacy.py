@@ -31,6 +31,8 @@ def main() -> int:
         return 2
 
     files = sorted(fixtures_dir.glob("*.json"))
+    # Phase 6.4C2-A.5：manifest.json 是治理紀錄（非案例），跳過不掃
+    files = [f for f in files if f.name != "manifest.json"]
     if not files:
         print(f"錯誤: 目錄無 .json 檔案 {fixtures_dir}", file=sys.stderr)
         return 2

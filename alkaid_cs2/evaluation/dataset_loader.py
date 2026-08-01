@@ -177,6 +177,10 @@ def load_evaluation_directory(path: str | Path) -> list[EvaluationCase]:
     cases: list[EvaluationCase] = []
     seen: dict[str, str] = {}
     for p in sorted(d.glob("*.json")):
+        # Phase 6.4C2-A：evaluation_real 目錄的 manifest.json 是治理紀錄
+        # （非案例），跳過不載入
+        if p.name == "manifest.json":
+            continue
         case = load_evaluation_case(p)
         if case.case_id in seen:
             raise ValueError(
