@@ -1,0 +1,14 @@
+{
+  "type": "single",
+  "items": [
+    {
+      "market_hash_name": "Redline",
+      "chinese_name": "AK-47 | 红线",
+      "wear": "久经沙场",
+      "price": 5500,
+      "currency": "TWD",
+      "confidence": 0.9,
+      "evidence": "售 5500"
+    }
+  ]
+}

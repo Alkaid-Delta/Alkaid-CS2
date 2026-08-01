@@ -852,6 +852,82 @@ def print_deal_report(deal: dict):
 # 主流程
 # ============================================================
 
+def extract_vision_inputs_from_post(post: dict) -> list | None:
+    """從 post 整理 VisionImageInput 清單（無資料 → None；非法資料 warning 不 crash）。
+
+    來源優先順序：
+    A. post["vision_inputs"]
+    B. post["vision_payloads"]（image_url 從 post["images"] 對應）
+    C. post["items"]（舊 crawler Vision 結果 → 單一 payload）
+    D. 無資料 → None
+    """
+    from alkaid_cs2.integration.vision_production import VisionImageInput
+
+    import copy
+
+    results: list = []
+    post_id = post.get("id", "")
+    images = post.get("images") or []
+
+    # A. vision_inputs
+    vis = post.get("vision_inputs")
+    if vis is not None:
+        for i, item in enumerate(vis):
+            try:
+                if isinstance(item, VisionImageInput):
+                    # defensive copy：不共享呼叫端物件參照
+                    results.append(VisionImageInput(
+                        image_index=item.image_index,
+                        image_url=item.image_url,
+                        image_hash=item.image_hash,
+                        payload=copy.deepcopy(item.payload),
+                    ))
+                elif isinstance(item, dict):
+                    results.append(VisionImageInput(
+                        image_index=int(item.get("image_index", i)),
+                        image_url=item.get("image_url", ""),
+                        image_hash=item.get("image_hash"),
+                        payload=item.get("payload"),
+                    ))
+                else:
+                    print(f"    ⚠️ vision_inputs[{i}] 格式不支援,跳過")
+            except (TypeError, ValueError) as exc:
+                print(f"    ⚠️ vision_inputs[{i}] 無效: {exc}")
+        return results or None
+
+    # B. vision_payloads
+    vps = post.get("vision_payloads")
+    if vps is not None:
+        if isinstance(vps, list):
+            for i, payload in enumerate(vps):
+                url = images[i] if i < len(images) else f"inline://post/{post_id}/image/{i}"
+                try:
+                    results.append(VisionImageInput(image_index=i, image_url=url, payload=payload))
+                except (TypeError, ValueError) as exc:
+                    print(f"    ⚠️ vision_payloads[{i}] 無效: {exc}")
+            return results or None
+        print("    ⚠️ vision_payloads 不是 list,忽略")
+        return None
+
+    # C. 舊 post["items"]（crawler Vision 結果）
+    items = post.get("items")
+    if items:
+        payload = {
+            "type": "multi" if len(items) > 1 else "single",
+            "platform": "facebook",
+            "items": items,
+        }
+        url = images[0] if images else f"inline://post/{post_id}/image/0"
+        try:
+            return [VisionImageInput(image_index=0, image_url=url, payload=payload)]
+        except (TypeError, ValueError) as exc:
+            print(f"    ⚠️ post items 轉換無效: {exc}")
+            return None
+
+    # D. 無資料
+    return None
+
+
 def process_posts(posts: list[dict]) -> list[dict]:
     deals = []
     processed_ids = []
@@ -886,12 +962,15 @@ def process_posts(posts: list[dict]) -> list[dict]:
             post["_seller_price"] = sp
         else:
             full_v2, pattern_v2 = _load_v2_dicts()
+            vision_inputs = extract_vision_inputs_from_post(post)
+            post_link = post.get("link") or post.get("url") or ""
             result = parse_post_for_production(
                 post_id=post.get("id", ""),
                 author=post.get("author", ""),
-                link=post.get("url", ""),
+                link=post_link,
                 post_text=post.get("content", ""),
                 image_urls=post.get("images", []) or [],
+                vision_inputs=vision_inputs,
                 full_dict=full_v2,
                 pattern_dict=pattern_v2,
                 weapon_map=_V2_WEAPON_MAP,

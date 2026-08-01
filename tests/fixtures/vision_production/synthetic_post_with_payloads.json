@@ -1,0 +1,37 @@
+{
+  "id": "post_payloads_001",
+  "author": "測試賣家",
+  "url": "https://fb.com/p/2",
+  "content": "售 紅線 算5000",
+  "images": [
+    "https://scontent.fbcdn.net/v/t1/a.jpg",
+    "https://scontent.fbcdn.net/v/t1/b.jpg"
+  ],
+  "vision_payloads": [
+    {
+      "type": "single",
+      "items": [
+        {
+          "market_hash_name": "Redline",
+          "chinese_name": "AK-47 | 红线",
+          "wear": "久经沙场",
+          "price": 5000,
+          "currency": "TWD",
+          "confidence": 0.9,
+          "evidence": "售 5000"
+        }
+      ]
+    },
+    {
+      "type": "single",
+      "items": [
+        {
+          "chinese_name": "AK-47 | 火神",
+          "price": 14000,
+          "currency": "TWD",
+          "confidence": 0.8
+        }
+      ]
+    }
+  ]
+}

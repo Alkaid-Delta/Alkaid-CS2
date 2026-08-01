@@ -1,0 +1,17 @@
+{
+  "id": "post_items_001",
+  "author": "測試賣家",
+  "url": "https://fb.com/p/1",
+  "content": "售 AK-47 | 红线 久经沙场 算5000",
+  "images": [
+    "https://scontent.fbcdn.net/v/t1/1.jpg"
+  ],
+  "items": [
+    {
+      "name": "AK-47 | 红线",
+      "wear": "久经沙场",
+      "price": 5000,
+      "currency": "TWD"
+    }
+  ]
+}
