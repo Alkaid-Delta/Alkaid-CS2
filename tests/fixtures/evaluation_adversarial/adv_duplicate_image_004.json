@@ -1,0 +1,62 @@
+{
+  "case_id": "adv_duplicate_image_004",
+  "source": "adversarial_synthetic",
+  "author": "synthetic",
+  "link": "fixture://adv_duplicate_image_004",
+  "raw_text": "售 AK-47 红线 久经沙场 算5000",
+  "images": [
+    {
+      "image_index": 0,
+      "image_url": "fixture://image/adv_duplicate_image_004/0",
+      "image_kind": "single",
+      "vision_payload": {
+        "type": "single",
+        "platform": "facebook",
+        "items": [
+          {
+            "name": "AK-47 | Redline",
+            "price": "5000",
+            "currency": "TWD"
+          }
+        ]
+      },
+      "should_create_price": true
+    },
+    {
+      "image_index": 1,
+      "image_url": "fixture://image/adv_duplicate_image_004/1",
+      "image_kind": "single",
+      "vision_payload": {
+        "type": "single",
+        "platform": "facebook",
+        "items": [
+          {
+            "name": "AK-47 | Redline",
+            "price": "5000",
+            "currency": "TWD"
+          }
+        ]
+      },
+      "should_create_price": true
+    }
+  ],
+  "expected_items": [
+    {
+      "market_hash_name": "AK-47 | Redline (Field-Tested)",
+      "role": "selling",
+      "seller_price": "5000",
+      "currency": "TWD",
+      "image_indexes": [
+        0,
+        1
+      ]
+    }
+  ],
+  "expected_post_intent": "selling",
+  "expected_safe_for_production": true,
+  "expected_raw_vision_safe": true,
+  "tags": [
+    "duplicate_image"
+  ],
+  "notes": "adversarial synthetic（衝突/錯序/重複/低信心）"
+}

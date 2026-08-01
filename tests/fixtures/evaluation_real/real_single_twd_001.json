@@ -1,0 +1,50 @@
+{
+  "case_id": "real_single_twd_001",
+  "source": "manual_fixture",
+  "author": "anonymous",
+  "link": "redacted://real_single_twd_001",
+  "raw_text": "售 AK-47 红线 久经沙场 算5000 台北面交",
+  "images": [
+    {
+      "image_index": 0,
+      "image_url": "redacted://image/real_single_twd_001/0",
+      "image_kind": "single",
+      "vision_payload": {
+        "type": "single",
+        "platform": "facebook",
+        "items": [
+          {
+            "name": "AK-47 | Redline (Field-Tested)",
+            "price": "5000",
+            "currency": "TWD"
+          }
+        ]
+      },
+      "should_create_price": true
+    }
+  ],
+  "expected_items": [
+    {
+      "market_hash_name": "AK-47 | Redline (Field-Tested)",
+      "role": "selling",
+      "seller_price": "5000",
+      "currency": "TWD",
+      "wear": "Field-Tested",
+      "image_indexes": [
+        0
+      ]
+    }
+  ],
+  "expected_post_intent": "selling",
+  "expected_safe_for_production": true,
+  "expected_raw_vision_safe": true,
+  "tags": [
+    "single",
+    "twd"
+  ],
+  "notes": "匿名化真實案例（無原始圖片、無個人資訊）；來源狀態=agent_generated（非真實貼文）→ 依 6.4C1.1 標為 manual_fixture",
+  "redaction_version": "1.0",
+  "ground_truth_reviewed_by": "reviewer_a",
+  "ground_truth_review_status": "double_review",
+  "excluded_from_readiness": false
+}

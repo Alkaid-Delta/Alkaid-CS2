@@ -1,0 +1,48 @@
+{
+  "case_id": "adv_payment_market_006",
+  "source": "adversarial_synthetic",
+  "author": "synthetic",
+  "link": "fixture://adv_payment_market_006",
+  "raw_text": "（付款截圖 5000 元 + BUFF 掛牌圖）",
+  "images": [
+    {
+      "image_index": 0,
+      "image_url": "fixture://image/adv_payment_market_006/0",
+      "image_kind": "payment",
+      "vision_payload": {
+        "type": "payment",
+        "platform": "facebook",
+        "items": []
+      },
+      "should_create_price": false
+    },
+    {
+      "image_index": 1,
+      "image_url": "fixture://image/adv_payment_market_006/1",
+      "image_kind": "market",
+      "vision_payload": {
+        "type": "market",
+        "platform": "facebook",
+        "items": [
+          {
+            "name": "AK-47 | Redline",
+            "price": "4600",
+            "currency": "RMB",
+            "role": "reference"
+          }
+        ]
+      },
+      "should_create_price": false
+    }
+  ],
+  "expected_items": [],
+  "expected_post_intent": "ambiguous",
+  "expected_safe_for_production": false,
+  "expected_raw_vision_safe": false,
+  "tags": [
+    "payment",
+    "market",
+    "no_seller"
+  ],
+  "notes": "adversarial synthetic（衝突/錯序/重複/低信心）"
+}

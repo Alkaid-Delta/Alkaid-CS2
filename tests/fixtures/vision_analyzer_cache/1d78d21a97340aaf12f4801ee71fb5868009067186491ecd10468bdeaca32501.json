@@ -1,0 +1,19 @@
+{
+  "cache_schema_version": "1.0",
+  "image_hash": "a19f73f667d76313",
+  "model_name": "gemini-2.5-flash",
+  "prompt_version": "cs2-vision-v1",
+  "analyzer_schema_version": "1.0",
+  "created_at": "2026-08-01T00:00:00Z",
+  "result": {
+    "type": "single",
+    "platform": "facebook",
+    "items": [
+      {
+        "name": "AK-47 | Redline",
+        "price": "5000",
+        "currency": "TWD"
+      }
+    ]
+  }
+}

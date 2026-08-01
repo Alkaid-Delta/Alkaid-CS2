@@ -333,3 +333,97 @@ def test_raw_safe_positive_and_negative_samples(out_dir):
     assert ds["raw_safe_expected_true"] >= 6, "raw 正例 ≥6"
     assert ds["raw_safe_expected_false"] >= 6, "raw 負例 ≥6"
     assert ds["raw_safe_expected_none"] == 34 - 12
+
+
+# ================================================================
+# Phase 6.4C1.4 — Inclusion flags / comparison population
+# ================================================================
+def test_default_excludes_single_and_disputed(out_dir):
+    report, code = run_evaluation(FIXTURES, out_dir, legacy_parser=_offline_legacy,
+                                  real_fixtures=os.path.join(
+                                      PROJECT_ROOT, "tests", "fixtures", "evaluation_real"),
+                                  adversarial_fixtures=os.path.join(
+                                      PROJECT_ROOT, "tests", "fixtures", "evaluation_adversarial"))
+    assert code == 0
+    q = report["dataset_quality"]
+    assert q["evaluated_cases"] == 48, "預設排除 single+disputed（34+6+8=48）"
+    rows = {r["case_id"] for r in report["case_by_case"]}
+    assert "real_simplified_rmb_009" not in rows, "single 不進 parser"
+    assert "real_inventory_grid_010" not in rows, "disputed 不進 parser"
+
+
+def test_include_single_only(out_dir):
+    report, code = run_evaluation(FIXTURES, out_dir, legacy_parser=_offline_legacy,
+                                  real_fixtures=os.path.join(
+                                      PROJECT_ROOT, "tests", "fixtures", "evaluation_real"),
+                                  adversarial_fixtures=os.path.join(
+                                      PROJECT_ROOT, "tests", "fixtures", "evaluation_adversarial"),                                  include_single_review=True)
+    assert code == 0
+    q = report["dataset_quality"]
+    assert q["evaluated_cases"] == 49, "include_single → +1"
+    rows = {r["case_id"] for r in report["case_by_case"]}
+    assert "real_simplified_rmb_009" in rows, "single 納入"
+    assert "real_inventory_grid_010" not in rows, "disputed 仍排除"
+
+
+def test_include_disputed_only(out_dir):
+    report, code = run_evaluation(FIXTURES, out_dir, legacy_parser=_offline_legacy,
+                                  real_fixtures=os.path.join(
+                                      PROJECT_ROOT, "tests", "fixtures", "evaluation_real"),
+                                  adversarial_fixtures=os.path.join(
+                                      PROJECT_ROOT, "tests", "fixtures", "evaluation_adversarial"),                                  include_disputed=True)
+    assert code == 0
+    q = report["dataset_quality"]
+    assert q["evaluated_cases"] == 49, "include_disputed → +1"
+    rows = {r["case_id"] for r in report["case_by_case"]}
+    assert "real_inventory_grid_010" in rows, "disputed 納入"
+    assert "real_simplified_rmb_009" not in rows, "single 仍排除"
+
+
+def test_include_both(out_dir):
+    report, code = run_evaluation(FIXTURES, out_dir, legacy_parser=_offline_legacy,
+                                  real_fixtures=os.path.join(
+                                      PROJECT_ROOT, "tests", "fixtures", "evaluation_real"),
+                                  adversarial_fixtures=os.path.join(
+                                      PROJECT_ROOT, "tests", "fixtures", "evaluation_adversarial"),                                  include_single_review=True, include_disputed=True)
+    assert code == 0
+    q = report["dataset_quality"]
+    assert q["evaluated_cases"] == 50, "include_both → 50"
+
+
+def test_analyzer_lookup_population_matches_evaluated_population(out_dir):
+    report, code = run_evaluation(FIXTURES, out_dir, legacy_parser=_offline_legacy,
+                                  real_fixtures=os.path.join(
+                                      PROJECT_ROOT, "tests", "fixtures", "evaluation_real"),
+                                  adversarial_fixtures=os.path.join(
+                                      PROJECT_ROOT, "tests", "fixtures", "evaluation_adversarial"),
+                                  analyzer_cache=os.path.join(
+                                      PROJECT_ROOT, "tests", "fixtures", "vision_analyzer_cache"),
+                                  compare_analyzer=True)
+    assert code == 0
+    q = report["dataset_quality"]
+    fva = report["fixture_vs_analyzer"]
+    assert fva["cache_lookup_count"] == q["analyzer_eligible_images"], \
+        "lookup 母體 = evaluated eligible images"
+    assert fva["cache_hit_count"] + fva["cache_miss_count"] == \
+        fva["cache_lookup_count"], "hit+miss = lookup"
+
+
+def test_comparison_skipped_matches_cache_miss(out_dir):
+    report, code = run_evaluation(FIXTURES, out_dir, legacy_parser=_offline_legacy,
+                                  real_fixtures=os.path.join(
+                                      PROJECT_ROOT, "tests", "fixtures", "evaluation_real"),
+                                  adversarial_fixtures=os.path.join(
+                                      PROJECT_ROOT, "tests", "fixtures", "evaluation_adversarial"),
+                                  analyzer_cache=os.path.join(
+                                      PROJECT_ROOT, "tests", "fixtures", "vision_analyzer_cache"),
+                                  compare_analyzer=True)
+    assert code == 0
+    q = report["dataset_quality"]
+    fva = report["fixture_vs_analyzer"]
+    assert fva["comparison_skipped_no_analyzer_payload"] == \
+        fva["cache_miss_count"], "skipped no analyzer = cache miss"
+    assert q["cached_analyzer_cases"] == fva["cases_compared"], \
+        "cached cases = cases compared"
+    assert q["cached_analyzer_images"] == fva["images_compared"], \
+        "cached images = images compared"

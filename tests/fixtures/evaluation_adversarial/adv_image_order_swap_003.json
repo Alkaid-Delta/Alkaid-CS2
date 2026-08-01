@@ -1,0 +1,73 @@
+{
+  "case_id": "adv_image_order_swap_003",
+  "source": "adversarial_synthetic",
+  "author": "synthetic",
+  "link": "fixture://adv_image_order_swap_003",
+  "raw_text": "售 AWP 二西莫夫 久经沙场 算18000 AK-47 红线 算5000",
+  "images": [
+    {
+      "image_index": 0,
+      "image_url": "fixture://image/adv_image_order_swap_003/0",
+      "image_kind": "single",
+      "vision_payload": {
+        "type": "single",
+        "platform": "facebook",
+        "items": [
+          {
+            "name": "AK-47 | Redline",
+            "price": "5000",
+            "currency": "TWD"
+          }
+        ]
+      },
+      "should_create_price": true
+    },
+    {
+      "image_index": 1,
+      "image_url": "fixture://image/adv_image_order_swap_003/1",
+      "image_kind": "single",
+      "vision_payload": {
+        "type": "single",
+        "platform": "facebook",
+        "items": [
+          {
+            "name": "AWP | Asiimov",
+            "price": "18000",
+            "currency": "TWD"
+          }
+        ]
+      },
+      "should_create_price": true
+    }
+  ],
+  "expected_items": [
+    {
+      "market_hash_name": "AWP | Asiimov (Field-Tested)",
+      "role": "selling",
+      "seller_price": "18000",
+      "currency": "TWD",
+      "image_indexes": [
+        0,
+        1
+      ]
+    },
+    {
+      "market_hash_name": "AK-47 | Redline (Field-Tested)",
+      "role": "selling",
+      "seller_price": "5000",
+      "currency": "TWD",
+      "image_indexes": [
+        0,
+        1
+      ]
+    }
+  ],
+  "expected_post_intent": "ambiguous",
+  "expected_safe_for_production": false,
+  "expected_raw_vision_safe": false,
+  "tags": [
+    "order_swap",
+    "ambiguous"
+  ],
+  "notes": "adversarial synthetic（衝突/錯序/重複/低信心）"
+}

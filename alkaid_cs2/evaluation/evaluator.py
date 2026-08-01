@@ -211,11 +211,17 @@ def _prediction_from_raw_merge(case: EvaluationCase,
 def evaluate_raw_vision_merge(case: EvaluationCase, *,
                               full_dict: dict[str, str],
                               pattern_dict: dict[str, str],
-                              weapon_map: dict[str, str]) -> VisionMergeProductionResult:
-    """評估 Vision merged 本身（不做 production fallback）。"""
+                              weapon_map: dict[str, str],
+                              real_analyzer_payloads: dict[int, dict] | None = None
+                              ) -> VisionMergeProductionResult:
+    """評估 Vision merged 本身（不做 production fallback）。
+
+    real_analyzer_payloads：以真實 analyzer payload 取代 fixture payload。
+    """
     inputs = [
         VisionImageInput(image_index=im.image_index, image_url=im.image_url,
-                         payload=im.vision_payload)
+                         payload=real_analyzer_payloads.get(im.image_index)
+                         if real_analyzer_payloads else im.vision_payload)
         for im in case.images
     ]
     post = RawPostInput(post_id=case.case_id, author=case.author, link=case.link,
@@ -244,10 +250,15 @@ def evaluate_case(case: EvaluationCase, *,
                   pattern_dict: dict[str, str],
                   weapon_map: dict[str, str],
                   legacy_parser: Callable[[str], dict | None],
+                  real_analyzer_payloads: dict[int, dict] | None = None,
                   ) -> dict[str, object]:
     """產生 legacy / text_v2 / vision_raw / vision_production 四組 prediction。
 
     相容 alias：vision_v2 → vision_production（向後相容）。
+
+    real_analyzer_payloads（Phase 6.4C1）：以真實 analyzer cache payload
+    取代 fixture vision_payload（key=image_index）。缺圖的 index 保留
+    fixture payload 作為 fallback（供人工對比）。
     """
     results: dict[str, object] = {}
 
@@ -283,7 +294,7 @@ def evaluate_case(case: EvaluationCase, *,
     try:
         raw_merge = evaluate_raw_vision_merge(
             case, full_dict=full_dict, pattern_dict=pattern_dict,
-            weapon_map=weapon_map)
+            weapon_map=weapon_map, real_analyzer_payloads=real_analyzer_payloads)
     except (ValueError, TypeError, KeyError) as exc:
         raw_merge = None
         results["raw_vision_merge_error"] = f"{type(exc).__name__}:{str(exc)[:200]}"
@@ -301,7 +312,8 @@ def evaluate_case(case: EvaluationCase, *,
     # ── D. vision_production（fallback 後最終 production 結果）──
     inputs = [
         VisionImageInput(image_index=im.image_index, image_url=im.image_url,
-                         payload=im.vision_payload)
+                         payload=real_analyzer_payloads.get(im.image_index)
+                         if real_analyzer_payloads else im.vision_payload)
         for im in case.images
     ]
     started = time.perf_counter()

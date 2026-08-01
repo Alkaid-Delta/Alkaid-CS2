@@ -16,20 +16,176 @@ from alkaid_cs2.evaluation.scoring import CaseEvaluationResult, MetricCounts
 READINESS_NOT_READY = "NOT_READY"
 READINESS_SHADOW = "SHADOW_READY"
 READINESS_SAFE_PILOT = "SAFE_PILOT_CANDIDATE"
+READINESS_SHADOW_REAL_PENDING = "SHADOW_READY_REAL_DATA_PENDING"
 
 PARSER_ORDER = ("legacy", "text_v2", "vision_raw", "vision_production")
 
 KNOWN_LIMITATIONS = [
-    "all_cases_synthetic",
     "vision_payloads_are_fixture_outputs",
     "offline_legacy_is_not_deepseek_legacy",
     "latency_is_local_runtime_metadata",
     "image_type_accuracy_is_fixture_biased",
 ]
+# Phase 6.4C1.1：有 real/manual 案例時取代 all_cases_synthetic
+REAL_DATA_LIMITATIONS = [
+    "anonymized_real_sample_size_small",
+    "external_analyzer_not_yet_executed",
+    "analyzer_cache_is_fixture_mirrored",
+    "image_hash_uses_url_placeholder",
+    "price_comparison_first_price_only",
+]
+
+
+def _known_limitations(cases: list[EvaluationCase]) -> list[str]:
+    """known limitations（6.4C1.3 三態）：
+
+    - 純 synthetic（無 manual/adversarial/real）→ all_cases_synthetic
+    - synthetic + manual/adversarial（無 anonymized_real）→
+      no_anonymized_real_cases + all_cases_are_synthetic_or_manual
+    - 含 anonymized_real → REAL_DATA_LIMITATIONS
+    """
+    from alkaid_cs2.evaluation.models import (  # noqa: E402
+        EvaluationSource,
+    )
+    has_real = any(c.source == EvaluationSource.ANONYMIZED_REAL for c in cases)
+    has_manual_adv = any(c.source in (EvaluationSource.MANUAL_FIXTURE,
+                                      EvaluationSource.ADVERSARIAL_SYNTHETIC)
+                         for c in cases)
+    base = [
+        "vision_payloads_are_fixture_outputs",
+        "offline_legacy_is_not_deepseek_legacy",
+        "latency_is_local_runtime_metadata",
+        "image_type_accuracy_is_fixture_biased",
+    ]
+    if has_real:
+        return list(REAL_DATA_LIMITATIONS) + base
+    if has_manual_adv:
+        return [
+            "no_anonymized_real_cases",
+            "all_cases_are_synthetic_or_manual",
+            "external_analyzer_not_yet_executed",
+            "analyzer_cache_is_fixture_mirrored",
+            "image_hash_uses_url_placeholder",
+            "price_comparison_first_price_only",
+        ] + base
+    return base + ["all_cases_synthetic"]
 
 
 def _pct(num: int, den: int) -> float:
     return num / den if den else 0.0
+
+
+def _dataset_quality(cases: list[EvaluationCase],
+                     privacy_findings: list,
+                     evaluated_count: int | None = None,
+                     analyzer_coverage: dict | None = None) -> dict[str, object]:
+    """dataset quality 區塊（Phase 6.4C1.2）。
+
+    - total_loaded_cases：載入的全部案例（含 single/disputed）
+    - evaluated_cases：實際跑 parser 的案例
+    - readiness_eligible_cases：可進 readiness 的案例
+    - analyzer coverage：external/cached cases 與 images（不得硬編碼 0）
+    """
+    from alkaid_cs2.evaluation.models import (  # noqa: E402
+        EvaluationSource, GroundTruthReviewStatus,
+    )
+    syn = sum(1 for c in cases if c.source == EvaluationSource.SYNTHETIC)
+    real = sum(1 for c in cases
+               if c.source == EvaluationSource.ANONYMIZED_REAL)
+    adv = sum(1 for c in cases
+              if c.source == EvaluationSource.ADVERSARIAL_SYNTHETIC)
+    manual = sum(1 for c in cases
+                 if c.source == EvaluationSource.MANUAL_FIXTURE)
+    double = sum(1 for c in cases
+                 if c.ground_truth_review_status == GroundTruthReviewStatus.DOUBLE_REVIEW)
+    single = sum(1 for c in cases
+                 if c.ground_truth_review_status == GroundTruthReviewStatus.SINGLE_REVIEW)
+    disputed = sum(1 for c in cases
+                   if c.ground_truth_review_status == GroundTruthReviewStatus.DISPUTED)
+    eligible = _readiness_eligible(cases)
+    excluded = sum(1 for c in cases if c.excluded_from_readiness)
+    n_err = sum(1 for f in privacy_findings if f.severity == "error")
+    n_warn = sum(1 for f in privacy_findings if f.severity == "warning")
+    evaluated = evaluated_count if evaluated_count is not None else len(eligible)
+    cov = analyzer_coverage or {}
+    ext_cases = cov.get("external_analyzer_cases", 0)
+    ext_images = cov.get("external_analyzer_images", 0)
+    cached_cases = cov.get("cached_analyzer_cases", 0)
+    cached_images = cov.get("cached_analyzer_images", 0)
+    eligible_images = cov.get("analyzer_eligible_images", 0)
+    covered_images = ext_images + cached_images
+    # Phase 6.4C1.3：real coverage 獨立（只統計 anonymized_real）
+    real_eligible = cov.get("real_analyzer_eligible_images", 0)
+    real_cached = cov.get("real_cached_analyzer_images", 0)
+    real_external = cov.get("real_external_analyzer_images", 0)
+    real_covered = real_cached + real_external
+    return {
+        "total_loaded_cases": len(cases),
+        "evaluated_cases": evaluated,
+        "readiness_eligible_cases": len(eligible),
+        "excluded_from_evaluation": excluded,
+        "synthetic_cases": syn,
+        "anonymized_real_cases": real,
+        "adversarial_cases": adv,
+        "manual_fixture_cases": manual,
+        "double_reviewed_cases": double,
+        "single_reviewed_cases": single,
+        "disputed_cases": disputed,
+        "privacy_error_count": n_err,
+        "privacy_warning_count": n_warn,
+        "external_analyzer_cases": ext_cases,
+        "external_analyzer_images": ext_images,
+        "cached_analyzer_cases": cached_cases,
+        "cached_analyzer_images": cached_images,
+        "analyzer_eligible_images": eligible_images,
+        "analyzer_coverage_rate": round(covered_images / eligible_images, 4)
+        if eligible_images else 0.0,
+        "real_analyzer_eligible_images": real_eligible,
+        "real_cached_analyzer_images": real_cached,
+        "real_external_analyzer_images": real_external,
+        "real_analyzer_coverage_rate": round(real_covered / real_eligible, 4)
+        if real_eligible else 0.0,
+        "fixture_only_cases": sum(1 for c in cases
+                                  if not c.images or
+                                  all(img.vision_payload is None for img in c.images)),
+    }
+
+
+def _real_data_validation_status(cases: list[EvaluationCase],
+                                 real_coverage_rate: float | None = None) -> str:
+    """real_data_validation_status：insufficient / partial / complete（6.4C1.3）。
+
+    - anonymized_real == 0 → insufficient（manual_fixture 不得計入）
+    - anonymized_real > 0 且任一未達 → partial：
+      real cases < 20 / double-reviewed real < 15 / real analyzer coverage < 80%
+    - 全達標 → complete
+    """
+    from alkaid_cs2.evaluation.models import (  # noqa: E402
+        EvaluationSource, GroundTruthReviewStatus,
+    )
+    real_total = sum(1 for c in cases
+                     if c.source == EvaluationSource.ANONYMIZED_REAL)
+    if real_total == 0:
+        return "insufficient"
+    real_double = sum(1 for c in cases
+                      if c.source == EvaluationSource.ANONYMIZED_REAL and
+                      c.ground_truth_review_status == GroundTruthReviewStatus.DOUBLE_REVIEW)
+    if real_total < 20 or real_double < 15:
+        return "partial"
+    if real_coverage_rate is None or real_coverage_rate < 0.80:
+        return "partial"  # real analyzer coverage < 80%
+    return "complete"
+
+
+def _readiness_eligible(cases: list[EvaluationCase]) -> list[EvaluationCase]:
+    from alkaid_cs2.evaluation.models import (  # noqa: E402
+        EvaluationSource, GroundTruthReviewStatus,
+    )
+    return [c for c in cases
+            if not c.excluded_from_readiness
+            and c.ground_truth_review_status != GroundTruthReviewStatus.DISPUTED
+            and (c.source != EvaluationSource.ANONYMIZED_REAL or
+                 c.ground_truth_review_status == GroundTruthReviewStatus.DOUBLE_REVIEW)]
 
 
 def _percent_str(ratio: float) -> str:
@@ -145,31 +301,65 @@ def _parser_stats(results: list[CaseEvaluationResult],
     }
 
 
-def _compute_readiness(cases: list[EvaluationCase], safe_matrix: dict[str, object],
-                       parser_stats: dict[str, object],
-                       crash_count: int) -> str:
-    n = len(cases)
-    if n < 25 or crash_count > 0:
+def _compute_readiness(cases: list[EvaluationCase],
+                       safe_matrix: dict, parser_stats: dict,
+                       crash_count: int,
+                       real_data_validation_status: str | None = None) -> str:
+    """readiness：NOT_READY / SHADOW_READY / SHADOW_READY_REAL_DATA_PENDING。
+
+    Phase 6.4C1.4：real status 由 caller 先算（含 real coverage），
+    此處不得自行重算而漏掉 coverage。
+    """
+    from alkaid_cs2.evaluation.models import EvaluationSource  # noqa: E402
+    eligible = _readiness_eligible(cases)
+    if crash_count > 0:
         return READINESS_NOT_READY
-    if n < 50:
-        return READINESS_SHADOW  # <50 最多 SHADOW_READY（不得 SAFE_PILOT_CANDIDATE）
-    if safe_matrix["safe_false_positive_rate"] > 0.01:
-        return READINESS_SHADOW
-    # seller FP：denominator 必須 > 0 且 rate <= 1%
+    if len(eligible) < 25:
+        return READINESS_NOT_READY
+    if safe_matrix.get("safe_false_positive_rate", 1.0) > 0.01:
+        return READINESS_SHADOW  # 有誤放行 → 最多 SHADOW（6.4B 相容）
     fp_den = parser_stats.get("seller_price_false_positive_denominator", 0)
     if fp_den <= 0:
-        return READINESS_SHADOW
+        return READINESS_SHADOW  # 無法驗證無錯 → 最多 SHADOW（不得 SAFE_PILOT）
     if parser_stats.get("seller_price_false_positive_rate", 1.0) > 0.01:
         return READINESS_SHADOW
-    if parser_stats.get("currency_accuracy", 0.0) < 0.99:
-        return READINESS_SHADOW
-    if parser_stats.get("item_exact_match_rate", 0.0) < 0.90:
-        return READINESS_SHADOW
-    if parser_stats.get("item_match_recall", 0.0) < 0.95:
-        return READINESS_SHADOW
-    if parser_stats.get("linking_accuracy", 0.0) < 0.95:
-        return READINESS_SHADOW
-    return READINESS_SAFE_PILOT
+    has_real = any(c.source == EvaluationSource.ANONYMIZED_REAL for c in cases)
+    if not has_real:
+        return READINESS_SHADOW  # 純 synthetic/manual（6.4B 相容）
+    # 有 anonymized_real 且 real status != complete → REAL_DATA_PENDING
+    if real_data_validation_status != "complete":
+        return READINESS_SHADOW_REAL_PENDING
+    return READINESS_SHADOW
+
+
+def _readiness_reasons(cases: list[EvaluationCase], safe_matrix: dict,
+                       parser_stats: dict, crash_count: int) -> list[str]:
+    """readiness reason codes（Phase 6.4C1）。"""
+    from alkaid_cs2.evaluation.models import (  # noqa: E402
+        EvaluationSource, GroundTruthReviewStatus,
+    )
+    reasons: list[str] = []
+    if crash_count > 0:
+        reasons.append("crash_present")
+    eligible = _readiness_eligible(cases)
+    if len(eligible) < 50:
+        reasons.append("insufficient_eligible_cases")
+    real_total = sum(1 for c in cases
+                     if c.source == EvaluationSource.ANONYMIZED_REAL)
+    real_double = sum(1 for c in cases
+                      if c.source == EvaluationSource.ANONYMIZED_REAL and
+                      c.ground_truth_review_status == GroundTruthReviewStatus.DOUBLE_REVIEW)
+    if real_total < 20:
+        reasons.append("insufficient_real_case_count")
+    if real_double < 15:
+        reasons.append("insufficient_double_reviewed_real")
+    if parser_stats.get("seller_price_false_positive_denominator", 0) <= 0:
+        reasons.append("seller_fp_denominator_zero")
+    if safe_matrix.get("safe_false_positive_rate", 1.0) > 0.01:
+        reasons.append("safe_false_positive_above_threshold")
+    if not reasons:
+        reasons.append("thresholds_met")
+    return reasons
 
 
 def generate_evaluation_report(
@@ -180,6 +370,9 @@ def generate_evaluation_report(
     git_commit: str | None = None,
     warnings_seen: list[str] | None = None,
     crash_cases: list[str] | None = None,
+    privacy_findings: list | None = None,
+    fixture_vs_analyzer: dict | None = None,
+    analyzer_coverage: dict | None = None,
 ) -> dict[str, object]:
     report: dict[str, object] = {
         "dataset": {
@@ -196,10 +389,16 @@ def generate_evaluation_report(
             "multi_image_cases": sum(1 for c in cases if len(c.images) > 1),
             "multi_item_cases": sum(1 for c in cases if len(c.expected_items) > 1),
         },
+        "dataset_quality": _dataset_quality(
+            cases, privacy_findings or [],
+            evaluated_count=len(results.get("vision_production", [])),
+            analyzer_coverage=analyzer_coverage),
+        "real_data_validation_status": "insufficient",  # 佔位；稍後以含 coverage 版本覆寫
+        "fixture_vs_analyzer": fixture_vs_analyzer or {},
         "parsers": {},
         "readiness": READINESS_NOT_READY,
         "crash_cases": crash_cases or [],
-        "known_limitations": list(KNOWN_LIMITATIONS),
+        "known_limitations": _known_limitations(cases),
     }
     tag_counter: dict[str, int] = {}
     for c in cases:
@@ -241,9 +440,19 @@ def generate_evaluation_report(
         entry["stats"] = stats
         report["parsers"][name] = entry
 
+    # Phase 6.4C1.4：real status 先算（含 real coverage），readiness 接收
+    real_status = _real_data_validation_status(
+        cases,
+        real_coverage_rate=(analyzer_coverage or {}).get(
+            "real_analyzer_coverage_rate"))
+    report["real_data_validation_status"] = real_status
+
     # readiness 以 vision_production 為準
     vis = report["parsers"]["vision_production"]["stats"]
     report["readiness"] = _compute_readiness(
+        cases, report["parsers"]["vision_production"]["safe"], vis, crash_count,
+        real_data_validation_status=real_status)
+    report["readiness_reasons"] = _readiness_reasons(
         cases, report["parsers"]["vision_production"]["safe"], vis, crash_count)
 
     all_w = warnings_seen or []
@@ -354,6 +563,68 @@ def write_evaluation_report_markdown(report: dict[str, object], path: str | Path
     lines.append(f"- multi-image：{ds['multi_image_cases']} / multi-item：{ds['multi_item_cases']}")
     lines.append(f"- git commit：{report.get('git_commit', 'N/A')}")
     lines.append(f"- readiness：**{report['readiness']}**\n")
+    reasons = report.get("readiness_reasons") or []
+    if reasons:
+        lines.append(f"- readiness reasons：{', '.join(reasons)}")
+
+    # Phase 6.4C1.1：Dataset Quality / Source / Review / Privacy / Excluded
+    q = report.get("dataset_quality") or {}
+    if q:
+        lines.append("\n## Dataset Quality")
+        lines.append(f"- total_loaded_cases：{q.get('total_loaded_cases', 0)}")
+        lines.append(f"- evaluated_cases：{q.get('evaluated_cases', 0)}")
+        lines.append(f"- readiness_eligible_cases：{q.get('readiness_eligible_cases', 0)}")
+        lines.append(f"- excluded_from_evaluation：{q.get('excluded_from_evaluation', 0)}")
+        lines.append(f"- privacy errors：{q.get('privacy_error_count', 0)} / "
+                     f"warnings：{q.get('privacy_warning_count', 0)}")
+        lines.append(f"- external analyzer cases：{q.get('external_analyzer_cases', 0)} / "
+                     f"cached analyzer cases：{q.get('cached_analyzer_cases', 0)}")
+    lines.append("\n## Source distribution")
+    lines.append(f"- synthetic：{q.get('synthetic_cases', 0)} / "
+                 f"anonymized_real：{q.get('anonymized_real_cases', 0)} / "
+                 f"manual_fixture：{q.get('manual_fixture_cases', 0)} / "
+                 f"adversarial：{q.get('adversarial_cases', 0)}")
+    lines.append("\n## Review distribution")
+    lines.append(f"- double_review：{q.get('double_reviewed_cases', 0)} / "
+                 f"single_review：{q.get('single_reviewed_cases', 0)} / "
+                 f"disputed：{q.get('disputed_cases', 0)}")
+    lines.append(f"- real data validation status：{report.get('real_data_validation_status', 'N/A')}\n")
+
+    # Phase 6.4C1.2：Fixture vs Analyzer 區塊（與 JSON 一致）
+    fva = report.get("fixture_vs_analyzer") or {}
+    if fva:
+        lines.append("## Fixture vs Analyzer")
+        lines.append(f"- cache lookup：{fva.get('cache_lookup_count', 0)} / "
+                     f"hit：{fva.get('cache_hit_count', 0)} / "
+                     f"miss：{fva.get('cache_miss_count', 0)}")
+        lines.append(f"- cached cases：{q.get('cached_analyzer_cases', 0)} / "
+                     f"cached images：{fva.get('images_with_cache', 0)}")
+        lines.append(f"- external cases：{q.get('external_analyzer_cases', 0)} / "
+                     f"external images：{q.get('external_analyzer_images', 0)}")
+        lines.append(f"- analyzer coverage：{q.get('analyzer_coverage_rate', 0.0):.2%}"
+                     f"（{q.get('analyzer_eligible_images', 0)} eligible images）")
+        lines.append(f"- evaluated analyzer eligible images：{q.get('analyzer_eligible_images', 0)} / "
+                     f"real analyzer eligible images：{q.get('real_analyzer_eligible_images', 0)}")
+        lines.append(f"- real cache/analyzer coverage："
+                     f"{q.get('real_analyzer_coverage_rate', 0.0):.2%}"
+                     f"（cached {q.get('real_cached_analyzer_images', 0)} / "
+                     f"external {q.get('real_external_analyzer_images', 0)}）")
+        lines.append("> ⚠️ 注意：fixture-mirrored cache accuracy **不代表真實模型準確率**"
+                     "（cache 內容 = 人工 fixture payload 鏡像）")
+        lines.append(f"- images compared：{fva.get('images_compared', 0)}")
+        lines.append(f"- image kind accuracy：{fva.get('image_kind_accuracy', 0.0):.2%} / "
+                     f"item count：{fva.get('item_count_accuracy', 0.0):.2%} / "
+                     f"item exact：{fva.get('item_exact_rate', 0.0):.2%} / "
+                     f"price exact：{fva.get('price_exact_rate', 0.0):.2%} / "
+                     f"currency：{fva.get('currency_accuracy', 0.0):.2%}")
+        lines.append(f"- skipped（no fixture payload）：{fva.get('comparison_skipped_no_fixture_payload', 0)} / "
+                     f"skipped（no analyzer payload）：{fva.get('comparison_skipped_no_analyzer_payload', 0)}")
+        dis = fva.get("disagreement_cases", [])
+        if dis:
+            lines.append(f"- disagreement cases：{', '.join(dis)}")
+        else:
+            lines.append("- disagreement cases：無")
+        lines.append("")
 
     for name in PARSER_ORDER:
         entry = report["parsers"][name]

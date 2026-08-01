@@ -1,0 +1,24 @@
+{
+  "cache_schema_version": "1.0",
+  "image_hash": "1fad6d7dc1e99c7a",
+  "model_name": "gemini-2.5-flash",
+  "prompt_version": "cs2-vision-v1",
+  "analyzer_schema_version": "1.0",
+  "created_at": "2026-08-01T00:00:00Z",
+  "result": {
+    "type": "multi",
+    "platform": "facebook",
+    "items": [
+      {
+        "name": "AWP | Asiimov",
+        "price": "18000",
+        "currency": "TWD"
+      },
+      {
+        "name": "AK-47 | Redline",
+        "price": "5000",
+        "currency": "TWD"
+      }
+    ]
+  }
+}

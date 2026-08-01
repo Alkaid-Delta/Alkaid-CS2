@@ -1,0 +1,55 @@
+{
+  "case_id": "real_inventory_grid_010",
+  "source": "manual_fixture",
+  "author": "anonymous",
+  "link": "redacted://real_inventory_grid_010",
+  "raw_text": "（庫存格圖：多把槍）",
+  "images": [
+    {
+      "image_index": 0,
+      "image_url": "redacted://image/real_inventory_grid_010/0",
+      "image_kind": "inventory",
+      "vision_payload": {
+        "type": "inventory",
+        "platform": "facebook",
+        "items": [
+          {
+            "name": "AK-47 | Redline"
+          },
+          {
+            "name": "AWP | Asiimov"
+          }
+        ]
+      },
+      "should_create_price": false
+    }
+  ],
+  "expected_items": [
+    {
+      "market_hash_name": "AK-47 | Redline (Field-Tested)",
+      "role": "unknown",
+      "image_indexes": [
+        0
+      ]
+    },
+    {
+      "market_hash_name": "AWP | Asiimov (Field-Tested)",
+      "role": "unknown",
+      "image_indexes": [
+        0
+      ]
+    }
+  ],
+  "expected_post_intent": "showcase",
+  "expected_safe_for_production": false,
+  "expected_raw_vision_safe": false,
+  "tags": [
+    "inventory",
+    "no_seller"
+  ],
+  "notes": "匿名化真實案例（無原始圖片、無個人資訊）；來源狀態=agent_generated（非真實貼文）→ 依 6.4C1.1 標為 manual_fixture",
+  "redaction_version": "1.0",
+  "ground_truth_reviewed_by": "reviewer_a",
+  "ground_truth_review_status": "disputed",
+  "excluded_from_readiness": true
+}

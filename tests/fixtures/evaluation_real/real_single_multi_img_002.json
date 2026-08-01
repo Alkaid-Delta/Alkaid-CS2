@@ -1,0 +1,66 @@
+{
+  "case_id": "real_single_multi_img_002",
+  "source": "manual_fixture",
+  "author": "anonymous",
+  "link": "redacted://real_single_multi_img_002",
+  "raw_text": "售 M4A1-S 印花集 略磨 算12000",
+  "images": [
+    {
+      "image_index": 0,
+      "image_url": "redacted://image/real_single_multi_img_002/0",
+      "image_kind": "single",
+      "vision_payload": {
+        "type": "single",
+        "platform": "facebook",
+        "items": [
+          {
+            "name": "M4A1-S | Printstream",
+            "price": "12000",
+            "currency": "TWD"
+          }
+        ]
+      },
+      "should_create_price": true
+    },
+    {
+      "image_index": 1,
+      "image_url": "redacted://image/real_single_multi_img_002/1",
+      "image_kind": "inspect",
+      "vision_payload": {
+        "type": "inspect",
+        "platform": "facebook",
+        "items": [
+          {
+            "name": "M4A1-S | Printstream"
+          }
+        ]
+      },
+      "should_create_price": false
+    }
+  ],
+  "expected_items": [
+    {
+      "market_hash_name": "M4A1-S | Printstream (Minimal Wear)",
+      "role": "selling",
+      "seller_price": "12000",
+      "currency": "TWD",
+      "wear": "Minimal Wear",
+      "image_indexes": [
+        0,
+        1
+      ]
+    }
+  ],
+  "expected_post_intent": "selling",
+  "expected_safe_for_production": true,
+  "expected_raw_vision_safe": true,
+  "tags": [
+    "multi_image",
+    "twd"
+  ],
+  "notes": "匿名化真實案例（無原始圖片、無個人資訊）；來源狀態=agent_generated（非真實貼文）→ 依 6.4C1.1 標為 manual_fixture",
+  "redaction_version": "1.0",
+  "ground_truth_reviewed_by": "reviewer_a",
+  "ground_truth_review_status": "double_review",
+  "excluded_from_readiness": false
+}

@@ -3,8 +3,25 @@
 - case 數：34
 - safe expected true：22 / raw safe true：6 / raw safe false：6 / raw safe None：22
 - multi-image：9 / multi-item：6
-- git commit：9b9ff7a6e491e55cd5339f726c0e31bdd3e5927a
+- git commit：5dcac837e6d9ae814ec1924ceafbe8b5b0159cf1
 - readiness：**SHADOW_READY**
+
+- readiness reasons：insufficient_eligible_cases, insufficient_real_case_count, insufficient_double_reviewed_real
+
+## Dataset Quality
+- total_loaded_cases：34
+- evaluated_cases：34
+- readiness_eligible_cases：34
+- excluded_from_evaluation：0
+- privacy errors：0 / warnings：0
+- external analyzer cases：0 / cached analyzer cases：0
+
+## Source distribution
+- synthetic：34 / anonymized_real：0 / manual_fixture：0 / adversarial：0
+
+## Review distribution
+- double_review：0 / single_review：0 / disputed：0
+- real data validation status：insufficient
 
 ## legacy
 
@@ -64,7 +81,7 @@
 - raw conflict detection：N/A
 - fallback to text_v2：0.00%
 - fallback to skipped：38.24%
-- avg latency：1.2ms / P50：1.2ms / P95：1.4ms
+- avg latency：1.3ms / P50：1.2ms / P95：1.8ms
 - avg image count：1.18 / avg retry：0.0
 - blocked rate：38.24%
 
@@ -93,7 +110,7 @@
 - raw conflict detection：100.00%
 - fallback to text_v2：0.00%
 - fallback to skipped：0.00%
-- avg latency：1.6ms / P50：1.6ms / P95：2.0ms
+- avg latency：1.5ms / P50：1.5ms / P95：2.0ms
 - avg image count：1.18 / avg retry：0.0
 - blocked rate：41.18%
 
@@ -121,7 +138,7 @@
 - raw conflict detection：N/A
 - fallback to text_v2：29.41%
 - fallback to skipped：38.24%
-- avg latency：2.6ms / P50：2.8ms / P95：3.4ms
+- avg latency：2.7ms / P50：2.8ms / P95：4.5ms
 - avg image count：1.18 / avg retry：0.0
 - blocked rate：38.24%
 
@@ -140,11 +157,11 @@
 - cases_executed=34 crash_count=0 crash_rate=0.0
 
 ## Known limitations
-- all_cases_synthetic
 - vision_payloads_are_fixture_outputs
 - offline_legacy_is_not_deepseek_legacy
 - latency_is_local_runtime_metadata
 - image_type_accuracy_is_fixture_biased
+- all_cases_synthetic
 
 ## Readiness recommendation
 **SHADOW_READY**

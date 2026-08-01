@@ -1,0 +1,51 @@
+{
+  "case_id": "real_stattrak_005",
+  "source": "manual_fixture",
+  "author": "anonymous",
+  "link": "redacted://real_stattrak_005",
+  "raw_text": "售 StatTrak™ AK-47 红线 略磨 算9000",
+  "images": [
+    {
+      "image_index": 0,
+      "image_url": "redacted://image/real_stattrak_005/0",
+      "image_kind": "single",
+      "vision_payload": {
+        "type": "single",
+        "platform": "facebook",
+        "items": [
+          {
+            "name": "StatTrak™ AK-47 | Redline (Minimal Wear)",
+            "price": "9000",
+            "currency": "TWD"
+          }
+        ]
+      },
+      "should_create_price": true
+    }
+  ],
+  "expected_items": [
+    {
+      "market_hash_name": "StatTrak™ AK-47 | Redline (Minimal Wear)",
+      "role": "selling",
+      "seller_price": "9000",
+      "currency": "TWD",
+      "wear": "Minimal Wear",
+      "stattrak": true,
+      "image_indexes": [
+        0
+      ]
+    }
+  ],
+  "expected_post_intent": "selling",
+  "expected_safe_for_production": true,
+  "expected_raw_vision_safe": true,
+  "tags": [
+    "stattrak",
+    "twd"
+  ],
+  "notes": "匿名化真實案例（無原始圖片、無個人資訊）；來源狀態=agent_generated（非真實貼文）→ 依 6.4C1.1 標為 manual_fixture",
+  "redaction_version": "1.0",
+  "ground_truth_reviewed_by": "reviewer_a",
+  "ground_truth_review_status": "double_review",
+  "excluded_from_readiness": false
+}

@@ -1,0 +1,33 @@
+{
+  "case_id": "real_chat_008",
+  "source": "manual_fixture",
+  "author": "anonymous",
+  "link": "redacted://real_chat_008",
+  "raw_text": "（聊天截圖：朋友問價）",
+  "images": [
+    {
+      "image_index": 0,
+      "image_url": "redacted://image/real_chat_008/0",
+      "image_kind": "chat",
+      "vision_payload": {
+        "type": "chat",
+        "platform": "facebook",
+        "items": []
+      },
+      "should_create_price": false
+    }
+  ],
+  "expected_items": [],
+  "expected_post_intent": "chat",
+  "expected_safe_for_production": false,
+  "expected_raw_vision_safe": false,
+  "tags": [
+    "chat",
+    "no_seller"
+  ],
+  "notes": "匿名化真實案例（無原始圖片、無個人資訊）；來源狀態=agent_generated（非真實貼文）→ 依 6.4C1.1 標為 manual_fixture",
+  "redaction_version": "1.0",
+  "ground_truth_reviewed_by": "reviewer_a",
+  "ground_truth_review_status": "double_review",
+  "excluded_from_readiness": false
+}

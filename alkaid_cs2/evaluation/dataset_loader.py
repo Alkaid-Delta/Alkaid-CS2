@@ -16,6 +16,7 @@ from alkaid_cs2.evaluation.models import (
     EvaluationSource,
     ExpectedImageKind,
     ExpectedItem,
+    GroundTruthReviewStatus,
     parse_currency,
     parse_decimal,
 )
@@ -81,7 +82,7 @@ def _parse_image(raw: dict, case_id: str) -> EvaluationImage:
 
 
 def load_evaluation_case(path: str | Path) -> EvaluationCase:
-    """讀取單一案例 JSON → EvaluationCase（含 enum/Decimal 轉換）。"""
+    """讀取單一案例 JSON → EvaluationCase（含 enum/Decimal 轉換、治理欄位、隱私 gate）。"""
     p = Path(path)
     try:
         data = json.loads(p.read_text(encoding="utf-8"))
@@ -102,27 +103,69 @@ def load_evaluation_case(path: str | Path) -> EvaluationCase:
         source = EvaluationSource(source_raw.lower())
     except ValueError:
         raise ValueError(f"{p.name}: 未知 source={source_raw!r}") from None
+    case_id = data["case_id"]
     raw_safe = data.get("expected_raw_vision_safe")
     if raw_safe is not None and not isinstance(raw_safe, bool):
         raise TypeError(f"{p.name}.expected_raw_vision_safe 必須 bool 或 None")
+
+    # Phase 6.4C1：治理欄位
+    redaction_version = data.get("redaction_version")
+    if redaction_version is not None and not isinstance(redaction_version, str):
+        raise TypeError(f"{case_id}: redaction_version 必須 str 或 None")
+    review_status_raw = data.get("ground_truth_review_status")
+    review_status = None
+    if review_status_raw is not None:
+        if not isinstance(review_status_raw, str):
+            raise TypeError(f"{case_id}: ground_truth_review_status 必須 str 或 None")
+        try:
+            review_status = GroundTruthReviewStatus(review_status_raw)
+        except ValueError:
+            raise ValueError(
+                f"{case_id}: review_status 必須 single_review/double_review/disputed，"
+                f"收到 {review_status_raw!r}") from None
+    reviewed_by = data.get("ground_truth_reviewed_by")
+    if reviewed_by is not None and not isinstance(reviewed_by, str):
+        raise TypeError(f"{case_id}: ground_truth_reviewed_by 必須 str 或 None")
+    excluded = data.get("excluded_from_readiness", False)
+    if not isinstance(excluded, bool):
+        raise TypeError(f"{case_id}: excluded_from_readiness 必須 bool")
+
     case = EvaluationCase(
-        case_id=data["case_id"],
+        case_id=case_id,
         source=source,
-        author=_require_str(data.get("author", "anonymous"), f"{p.name}.author"),
-        link=_require_str(data.get("link", ""), f"{p.name}.link"),
-        raw_text=_require_str(data.get("raw_text", ""), f"{p.name}.raw_text"),
-        images=[_parse_image(im, data["case_id"]) for im in (data.get("images") or [])],
-        expected_items=[_parse_item(it, data["case_id"])
+        author=_require_str(data.get("author", "anonymous"), f"{case_id}.author"),
+        link=_require_str(data.get("link", ""), f"{case_id}.link"),
+        raw_text=_require_str(data.get("raw_text", ""), f"{case_id}.raw_text"),
+        images=[_parse_image(im, case_id) for im in (data.get("images") or [])],
+        expected_items=[_parse_item(it, case_id)
                         for it in (data.get("expected_items") or [])],
         expected_post_intent=_require_str(data.get("expected_post_intent", ""),
-                                          f"{p.name}.expected_post_intent"),
+                                          f"{case_id}.expected_post_intent"),
         expected_safe_for_production=_require_bool(
             data.get("expected_safe_for_production", False),
-            f"{p.name}.expected_safe_for_production"),
+            f"{case_id}.expected_safe_for_production"),
         expected_raw_vision_safe=raw_safe,
-        tags=[_require_str(t, f"{p.name}.tags") for t in (data.get("tags") or [])],
+        tags=[_require_str(t, f"{case_id}.tags") for t in (data.get("tags") or [])],
         notes=data.get("notes"),
+        redaction_version=redaction_version,
+        ground_truth_reviewed_by=reviewed_by,
+        ground_truth_review_status=review_status,
+        excluded_from_readiness=excluded,
     )
+
+    # Phase 6.4C1：anonymized_real 必填治理欄位
+    if source == EvaluationSource.ANONYMIZED_REAL:
+        if not redaction_version:
+            raise ValueError(f"{case_id}: anonymized_real 必填 redaction_version")
+        if review_status is None:
+            raise ValueError(f"{case_id}: anonymized_real 必填 ground_truth_review_status")
+
+    # Phase 6.4C1：隱私掃描 gate（error → 拒絕載入）
+    from alkaid_cs2.evaluation.privacy import scan_fixture_for_sensitive_data
+    errors = [f for f in scan_fixture_for_sensitive_data(case) if f.severity == "error"]
+    if errors:
+        codes = ", ".join(f"{f.code}@{f.field}" for f in errors[:5])
+        raise ValueError(f"{case_id}: 隱私掃描拒絕載入（{codes}）")
     return case
 
 

@@ -1,0 +1,17 @@
+{
+  "cache_schema_version": "1.0",
+  "image_hash": "ab4a4bcde3454f6a",
+  "model_name": "gemini-2.5-flash",
+  "prompt_version": "cs2-vision-v1",
+  "analyzer_schema_version": "1.0",
+  "created_at": "2026-08-01T00:00:00Z",
+  "result": {
+    "type": "inspect",
+    "platform": "facebook",
+    "items": [
+      {
+        "name": "M4A1-S | Printstream"
+      }
+    ]
+  }
+}

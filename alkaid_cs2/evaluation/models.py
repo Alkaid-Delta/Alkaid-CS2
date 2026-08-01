@@ -17,6 +17,13 @@ class EvaluationSource(str, Enum):
     SYNTHETIC = "synthetic"
     ANONYMIZED_REAL = "anonymized_real"
     MANUAL_FIXTURE = "manual_fixture"
+    ADVERSARIAL_SYNTHETIC = "adversarial_synthetic"
+
+
+class GroundTruthReviewStatus(str, Enum):
+    SINGLE_REVIEW = "single_review"
+    DOUBLE_REVIEW = "double_review"
+    DISPUTED = "disputed"
 
 
 class ExpectedImageKind(str, Enum):
@@ -134,6 +141,11 @@ class EvaluationCase:
     expected_raw_vision_safe: bool | None = None
     tags: list[str] = field(default_factory=list)
     notes: str | None = None
+    # Phase 6.4C1：匿名化真實案例治理
+    redaction_version: str | None = None
+    ground_truth_reviewed_by: str | None = None
+    ground_truth_review_status: GroundTruthReviewStatus | None = None
+    excluded_from_readiness: bool = False
 
     def __post_init__(self) -> None:
         if not isinstance(self.case_id, str) or not self.case_id.strip():
