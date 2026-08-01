@@ -1,0 +1,19 @@
+{
+  "text": "售 AK-47 | 红线 久经沙场 算5000",
+  "image_payloads": [
+    {
+      "type": "single",
+      "items": [
+        {
+          "market_hash_name": "AK-47 | Redline (Minimal Wear)",
+          "weapon": "AK-47",
+          "skin": "Redline",
+          "wear": "略有磨损",
+          "price": 5000,
+          "currency": "TWD",
+          "confidence": 0.9
+        }
+      ]
+    }
+  ]
+}

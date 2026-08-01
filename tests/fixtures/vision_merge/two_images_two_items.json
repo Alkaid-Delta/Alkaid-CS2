@@ -1,0 +1,29 @@
+{
+  "text": "今天天氣很好",
+  "image_payloads": [
+    {
+      "type": "single",
+      "items": [
+        {
+          "chinese_name": "AK-47 | 红线",
+          "skin": "Redline",
+          "price": 7480,
+          "currency": "TWD",
+          "confidence": 0.8
+        }
+      ]
+    },
+    {
+      "type": "single",
+      "items": [
+        {
+          "chinese_name": "AK-47 | 火神",
+          "skin": "Vulcan",
+          "price": 14000,
+          "currency": "TWD",
+          "confidence": 0.8
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "text": "售 AK-47 | 红线 久经沙场 算5000",
+  "image_payloads": [
+    {
+      "type": "single",
+      "items": [
+        {
+          "market_hash_name": "AK-47 | Redline (Field-Tested)",
+          "chinese_name": "AK-47 | 红线",
+          "wear": "久经沙场",
+          "price": 5000,
+          "currency": "TWD",
+          "confidence": 0.9,
+          "evidence": "售 5000"
+        }
+      ]
+    }
+  ]
+}
