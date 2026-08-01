@@ -1,0 +1,58 @@
+{
+  "case_id": "all_vision_failed_text_unsafe_028",
+  "source": "synthetic",
+  "author": "anonymous",
+  "link": "fixture://all_vision_failed_text_unsafe_028",
+  "raw_text": "售 AK-47 红线 久经沙场 算5000 AWP 火蛇 崭新出厂 算14000",
+  "images": [
+    {
+      "image_index": 0,
+      "image_url": "fixture://image/0",
+      "image_kind": "other",
+      "vision_payload": null,
+      "expected_item_indexes": [],
+      "should_create_price": true
+    },
+    {
+      "image_index": 1,
+      "image_url": "fixture://image/1",
+      "image_kind": "other",
+      "vision_payload": null,
+      "expected_item_indexes": [],
+      "should_create_price": true
+    }
+  ],
+  "expected_items": [
+    {
+      "market_hash_name": "AK-47 | Redline (Field-Tested)",
+      "weapon": "AK-47",
+      "skin": "Redline",
+      "wear": "Field-Tested",
+      "stattrak": false,
+      "role": "selling",
+      "seller_price": "5000",
+      "currency": "TWD",
+      "image_indexes": []
+    },
+    {
+      "market_hash_name": "AWP | Dragon Lore (Factory New)",
+      "weapon": "AWP",
+      "skin": "Dragon Lore",
+      "wear": "Factory New",
+      "stattrak": false,
+      "role": "selling",
+      "seller_price": "14000",
+      "currency": "TWD",
+      "image_indexes": []
+    }
+  ],
+  "expected_post_intent": "selling",
+  "expected_safe_for_production": false,
+  "tags": [
+    "multi_image",
+    "all_failed",
+    "multi_item",
+    "not_safe"
+  ],
+  "notes": null
+}

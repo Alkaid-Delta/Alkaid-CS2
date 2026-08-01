@@ -1,0 +1,93 @@
+{
+  "case_id": "two_market_two_items_034",
+  "source": "synthetic",
+  "author": "anonymous",
+  "link": "fixture://two_market_two_items_034",
+  "raw_text": "售 AK-47 红线 久经沙场 算5000 AWP 火蛇 崭新出厂 算14000",
+  "images": [
+    {
+      "image_index": 0,
+      "image_url": "fixture://image/0",
+      "image_kind": "market",
+      "vision_payload": {
+        "type": "market",
+        "platform": "buff",
+        "items": [
+          {
+            "name": "AK-47 | 红线",
+            "wear": "久经沙场",
+            "price": 4300,
+            "currency": "RMB",
+            "confidence": 0.9,
+            "market_hash_name": "AK-47 | Redline (Field-Tested)"
+          }
+        ]
+      },
+      "expected_item_indexes": [
+        0
+      ],
+      "should_create_price": true
+    },
+    {
+      "image_index": 1,
+      "image_url": "fixture://image/1",
+      "image_kind": "market",
+      "vision_payload": {
+        "type": "market",
+        "platform": "buff",
+        "items": [
+          {
+            "name": "AWP | 火蛇",
+            "wear": "崭新出厂",
+            "price": 12000,
+            "currency": "RMB",
+            "confidence": 0.9,
+            "market_hash_name": "AWP | Dragon Lore (Factory New)"
+          }
+        ]
+      },
+      "expected_item_indexes": [
+        1
+      ],
+      "should_create_price": true
+    }
+  ],
+  "expected_items": [
+    {
+      "market_hash_name": "AK-47 | Redline (Field-Tested)",
+      "weapon": "AK-47",
+      "skin": "Redline",
+      "wear": "Field-Tested",
+      "stattrak": false,
+      "role": "selling",
+      "seller_price": "5000",
+      "currency": "TWD",
+      "image_indexes": [
+        0
+      ]
+    },
+    {
+      "market_hash_name": "AWP | Dragon Lore (Factory New)",
+      "weapon": "AWP",
+      "skin": "Dragon Lore",
+      "wear": "Factory New",
+      "stattrak": false,
+      "role": "selling",
+      "seller_price": "14000",
+      "currency": "TWD",
+      "image_indexes": [
+        1
+      ]
+    }
+  ],
+  "expected_post_intent": "selling",
+  "expected_safe_for_production": false,
+  "tags": [
+    "multi_item",
+    "multi_image",
+    "market",
+    "not_safe"
+  ],
+  "notes": "ambiguous link；expected_raw_vision_safe=false（raw ambiguous order linking）",
+  "expected_raw_vision_safe": false
+}

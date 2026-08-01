@@ -1,0 +1,30 @@
+{
+  "case_id": "payment_no_item_012",
+  "source": "synthetic",
+  "author": "anonymous",
+  "link": "fixture://payment_no_item_012",
+  "raw_text": "已付款 5000",
+  "images": [
+    {
+      "image_index": 0,
+      "image_url": "fixture://image/0",
+      "image_kind": "payment",
+      "vision_payload": {
+        "type": "payment",
+        "platform": "facebook",
+        "items": []
+      },
+      "expected_item_indexes": [],
+      "should_create_price": false
+    }
+  ],
+  "expected_items": [],
+  "expected_post_intent": "payment",
+  "expected_safe_for_production": false,
+  "tags": [
+    "payment",
+    "no_item",
+    "not_safe"
+  ],
+  "notes": null
+}

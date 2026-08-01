@@ -1,0 +1,28 @@
+{
+  "case_id": "text_only_safe_003",
+  "source": "synthetic",
+  "author": "anonymous",
+  "link": "fixture://text_only_safe_003",
+  "raw_text": "售 AK-47 红线 久经沙场 算5000",
+  "images": [],
+  "expected_items": [
+    {
+      "market_hash_name": "AK-47 | Redline (Field-Tested)",
+      "weapon": "AK-47",
+      "skin": "Redline",
+      "wear": "Field-Tested",
+      "stattrak": false,
+      "role": "selling",
+      "seller_price": "5000",
+      "currency": "TWD",
+      "image_indexes": []
+    }
+  ],
+  "expected_post_intent": "selling",
+  "expected_safe_for_production": true,
+  "tags": [
+    "text_only",
+    "safe"
+  ],
+  "notes": null
+}

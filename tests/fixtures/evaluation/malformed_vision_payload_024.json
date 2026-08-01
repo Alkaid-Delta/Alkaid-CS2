@@ -1,0 +1,38 @@
+{
+  "case_id": "malformed_vision_payload_024",
+  "source": "synthetic",
+  "author": "anonymous",
+  "link": "fixture://malformed_vision_payload_024",
+  "raw_text": "售 AK-47 红线 久经沙场 算5000",
+  "images": [
+    {
+      "image_index": 0,
+      "image_url": "fixture://image/0",
+      "image_kind": "other",
+      "vision_payload": "{bad json",
+      "expected_item_indexes": [],
+      "should_create_price": true
+    }
+  ],
+  "expected_items": [
+    {
+      "market_hash_name": "AK-47 | Redline (Field-Tested)",
+      "weapon": "AK-47",
+      "skin": "Redline",
+      "wear": "Field-Tested",
+      "stattrak": false,
+      "role": "selling",
+      "seller_price": "5000",
+      "currency": "TWD",
+      "image_indexes": []
+    }
+  ],
+  "expected_post_intent": "selling",
+  "expected_safe_for_production": true,
+  "tags": [
+    "malformed",
+    "failure",
+    "safe"
+  ],
+  "notes": "malformed payload → text fallback"
+}

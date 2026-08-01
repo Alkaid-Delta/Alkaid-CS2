@@ -1,0 +1,56 @@
+{
+  "case_id": "knife_star_prefix_023",
+  "source": "synthetic",
+  "author": "anonymous",
+  "link": "fixture://knife_star_prefix_023",
+  "raw_text": "售 ★蝴蝶刀 渐变 崭新出厂 算69000",
+  "images": [
+    {
+      "image_index": 0,
+      "image_url": "fixture://image/0",
+      "image_kind": "single",
+      "vision_payload": {
+        "type": "single",
+        "platform": "facebook",
+        "items": [
+          {
+            "name": "★蝴蝶刀 | 渐变",
+            "wear": "崭新出厂",
+            "price": 69000,
+            "currency": "TWD",
+            "confidence": 0.9,
+            "market_hash_name": "★ Butterfly Knife | Fade (Factory New)",
+            "evidence": "售 69000"
+          }
+        ]
+      },
+      "expected_item_indexes": [
+        0
+      ],
+      "should_create_price": true
+    }
+  ],
+  "expected_items": [
+    {
+      "market_hash_name": "★ Butterfly Knife | Fade (Factory New)",
+      "weapon": "Butterfly Knife",
+      "skin": "Fade",
+      "wear": "Factory New",
+      "stattrak": false,
+      "role": "selling",
+      "seller_price": "69000",
+      "currency": "TWD",
+      "image_indexes": [
+        0
+      ]
+    }
+  ],
+  "expected_post_intent": "selling",
+  "expected_safe_for_production": true,
+  "tags": [
+    "knife",
+    "star_prefix",
+    "safe"
+  ],
+  "notes": null
+}

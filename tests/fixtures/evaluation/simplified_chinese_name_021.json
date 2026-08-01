@@ -1,0 +1,55 @@
+{
+  "case_id": "simplified_chinese_name_021",
+  "source": "synthetic",
+  "author": "anonymous",
+  "link": "fixture://simplified_chinese_name_021",
+  "raw_text": "售 AK-47 红线 久经沙场 算5000",
+  "images": [
+    {
+      "image_index": 0,
+      "image_url": "fixture://image/0",
+      "image_kind": "single",
+      "vision_payload": {
+        "type": "single",
+        "platform": "facebook",
+        "items": [
+          {
+            "name": "AK-47 | 红线",
+            "wear": "久经沙场",
+            "price": 5000,
+            "currency": "TWD",
+            "confidence": 0.9,
+            "market_hash_name": "AK-47 | Redline (Field-Tested)",
+            "evidence": "售 5000"
+          }
+        ]
+      },
+      "expected_item_indexes": [
+        0
+      ],
+      "should_create_price": true
+    }
+  ],
+  "expected_items": [
+    {
+      "market_hash_name": "AK-47 | Redline (Field-Tested)",
+      "weapon": "AK-47",
+      "skin": "Redline",
+      "wear": "Field-Tested",
+      "stattrak": false,
+      "role": "selling",
+      "seller_price": "5000",
+      "currency": "TWD",
+      "image_indexes": [
+        0
+      ]
+    }
+  ],
+  "expected_post_intent": "selling",
+  "expected_safe_for_production": true,
+  "tags": [
+    "simplified",
+    "safe"
+  ],
+  "notes": null
+}

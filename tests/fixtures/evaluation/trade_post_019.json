@@ -1,0 +1,26 @@
+{
+  "case_id": "trade_post_019",
+  "source": "synthetic",
+  "author": "anonymous",
+  "link": "fixture://trade_post_019",
+  "raw_text": "換 AK-47 紅線 久經沙場 換 AWP 火蛇",
+  "images": [],
+  "expected_items": [
+    {
+      "market_hash_name": "AK-47 | Redline (Field-Tested)",
+      "weapon": "AK-47",
+      "skin": "Redline",
+      "wear": "Field-Tested",
+      "stattrak": false,
+      "role": "trading",
+      "image_indexes": []
+    }
+  ],
+  "expected_post_intent": "trading",
+  "expected_safe_for_production": false,
+  "tags": [
+    "trade",
+    "not_safe"
+  ],
+  "notes": null
+}

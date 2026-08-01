@@ -1,0 +1,31 @@
+{
+  "case_id": "inventory_only_not_safe_030",
+  "source": "synthetic",
+  "author": "anonymous",
+  "link": "fixture://inventory_only_not_safe_030",
+  "raw_text": "庫存圖",
+  "images": [
+    {
+      "image_index": 0,
+      "image_url": "fixture://image/0",
+      "image_kind": "inventory",
+      "vision_payload": {
+        "type": "inventory",
+        "rows": 3,
+        "cols": 7,
+        "items": []
+      },
+      "expected_item_indexes": [],
+      "should_create_price": false
+    }
+  ],
+  "expected_items": [],
+  "expected_post_intent": "selling",
+  "expected_safe_for_production": false,
+  "tags": [
+    "inventory",
+    "no_item",
+    "not_safe"
+  ],
+  "notes": null
+}

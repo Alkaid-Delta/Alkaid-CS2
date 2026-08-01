@@ -1,0 +1,27 @@
+{
+  "case_id": "buying_post_018",
+  "source": "synthetic",
+  "author": "anonymous",
+  "link": "fixture://buying_post_018",
+  "raw_text": "收 AK-47 紅線 久經沙場 出5000",
+  "images": [],
+  "expected_items": [
+    {
+      "market_hash_name": "AK-47 | Redline (Field-Tested)",
+      "weapon": "AK-47",
+      "skin": "Redline",
+      "wear": "Field-Tested",
+      "stattrak": false,
+      "role": "buying",
+      "currency": "TWD",
+      "image_indexes": []
+    }
+  ],
+  "expected_post_intent": "buying",
+  "expected_safe_for_production": false,
+  "tags": [
+    "buying",
+    "not_safe"
+  ],
+  "notes": null
+}

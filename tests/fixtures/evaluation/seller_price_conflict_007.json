@@ -1,0 +1,57 @@
+{
+  "case_id": "seller_price_conflict_007",
+  "source": "synthetic",
+  "author": "anonymous",
+  "link": "fixture://seller_price_conflict_007",
+  "raw_text": "售 AK-47 红线 久经沙场 算5000",
+  "images": [
+    {
+      "image_index": 0,
+      "image_url": "fixture://image/0",
+      "image_kind": "single",
+      "vision_payload": {
+        "type": "single",
+        "platform": "facebook",
+        "items": [
+          {
+            "name": "AK-47 | 红线",
+            "wear": "久经沙场",
+            "price": 5500,
+            "currency": "TWD",
+            "confidence": 0.9,
+            "market_hash_name": "AK-47 | Redline (Field-Tested)",
+            "evidence": "售 5500"
+          }
+        ]
+      },
+      "expected_item_indexes": [
+        0
+      ],
+      "should_create_price": true
+    }
+  ],
+  "expected_items": [
+    {
+      "market_hash_name": "AK-47 | Redline (Field-Tested)",
+      "weapon": "AK-47",
+      "skin": "Redline",
+      "wear": "Field-Tested",
+      "stattrak": false,
+      "role": "selling",
+      "seller_price": "5000",
+      "currency": "TWD",
+      "image_indexes": [
+        0
+      ]
+    }
+  ],
+  "expected_post_intent": "selling",
+  "expected_safe_for_production": true,
+  "tags": [
+    "conflict",
+    "price_conflict",
+    "not_safe"
+  ],
+  "notes": "conflict: text 5000 vs image 5500；production fallback text 後安全（conflict 由 conflict_detected 評估）；expected_raw_vision_safe=false（raw conflict (5000 vs 5500)）",
+  "expected_raw_vision_safe": false
+}
