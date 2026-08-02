@@ -187,6 +187,10 @@ def to_legacy_skin_info(parsed_post: ParsedPost) -> LegacyAdapterResult:
             "source": "v2_adapter",
             "item_role": item.role.value,
             "selection_reason": sel_reason.value,
+            # Phase P2：透傳 verification metadata（嚴格 bool）
+            "verified": item.verified,
+            "verified_by": item.verified_by,
+            "validation_error": item.validation_error,
         }
         warnings.append("no_seller_price")
         return LegacyAdapterResult(
@@ -222,6 +226,10 @@ def to_legacy_skin_info(parsed_post: ParsedPost) -> LegacyAdapterResult:
         "market_hash_name": item.market_hash_name,
         "seller_price": _to_legacy_amount(price.money.amount),
         "confidence": item.confidence,
+        # Phase P2：透傳 verification metadata（嚴格 bool）
+        "verified": item.verified,
+        "verified_by": item.verified_by,
+        "validation_error": item.validation_error,
         "source": "v2_adapter",
         "item_role": item.role.value,
         "selection_reason": sel_reason.value,

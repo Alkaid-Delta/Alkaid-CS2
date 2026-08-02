@@ -13,16 +13,10 @@
     ]
   },
   "legacy_single_nocts": {
-    "status": "ok",
-    "items": [
-      {
-        "skin": "Nocts",
-        "role": "selling",
-        "seller_price": 5000,
-        "currency": "TWD",
-        "weapon": "Sport Gloves"
-      }
-    ]
+    "status": "unresolved",
+    "items": [],
+    "market_hash_name": null,
+    "notes": "P2.2 收斂：貼文無武器詞，組裝名為 skin-only 'Nocts (Field-Tested)' → ItemValidator canonical miss → unresolved（skin-only 不得進查價）"
   },
   "redline_vulcan_simplified": {
     "status": "partial",
@@ -172,5 +166,69 @@
     "status": "partial",
     "items": [],
     "notes": "Trade-only post must not produce selling items; legacy returns one dict (first match)"
+  },
+  "p2_unknown_model_item": {
+    "status": "unresolved",
+    "items": [],
+    "market_hash_name": null
+  },
+  "p2_retry_succeeds": {
+    "status": "ok",
+    "items": [
+      {
+        "skin": "Nocts",
+        "wear": "Field-Tested",
+        "role": "selling",
+        "seller_price": 5000,
+        "currency": "TWD",
+        "weapon": "Sport Gloves"
+      }
+    ]
+  },
+  "p2_retry_fails_twice": {
+    "status": "unresolved",
+    "items": [],
+    "market_hash_name": null
+  },
+  "p2_trusted_dict_exact": {
+    "status": "ok",
+    "items": [
+      {
+        "skin": "Eastern Enigma",
+        "wear": "Factory New",
+        "role": "selling",
+        "seller_price": 6000,
+        "currency": "TWD",
+        "weapon": "Desert Eagle"
+      }
+    ]
+  },
+  "p2_alias_canonical": {
+    "status": "ok",
+    "items": [
+      {
+        "skin": "Eastern Enigma",
+        "wear": "Factory New",
+        "role": "selling",
+        "seller_price": 6000,
+        "currency": "TWD",
+        "weapon": "Desert Eagle"
+      }
+    ]
+  },
+  "p2_vision_only_unverified": {
+    "status": "unresolved",
+    "items": [],
+    "market_hash_name": null
+  },
+  "p2_safe_fallback_attempted": {
+    "status": "unresolved",
+    "items": [],
+    "market_hash_name": null
+  },
+  "p2_validator_unavailable": {
+    "status": "unresolved",
+    "items": [],
+    "market_hash_name": null
   }
 }

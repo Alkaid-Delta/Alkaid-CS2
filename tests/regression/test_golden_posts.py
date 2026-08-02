@@ -104,9 +104,13 @@ def test_legacy_single_nocts():
     exp = EXPECTED["legacy_single_nocts"]
 
     assert result["status"] == exp["status"]
-    mh = result["market_hash_name"] or ""
-    assert "Nocts" in mh, f"mhn={mh}"
-    assert result["seller_price"] == exp["items"][0]["seller_price"]
+    if exp["status"] == "ok":
+        mh = result["market_hash_name"] or ""
+        assert "Nocts" in mh, f"mhn={mh}"
+        assert result["seller_price"] == exp["items"][0]["seller_price"]
+    else:
+        # Phase P2.2：無武器 pattern 組裝名（skin-only）→ unresolved
+        assert result["market_hash_name"] is None
 
 
 # ---------------------------------------------------------------
@@ -186,8 +190,7 @@ def test_rmb_price_no_conversion_marker():
 #    → 現行 legacy 錯誤回傳第一次結果 → XFAIL
 #    Phase 2 validation gate 修正後才改 PASS
 # ---------------------------------------------------------------
-@pytest.mark.xfail(reason="known_defect: returns_unverified_first_result — 驗證兩次失敗仍回傳第一次名稱 (L562)",
-                   strict=False)
+#    Phase P2 修正後正式 PASS（L594 → unresolved 結構化結果）
 def test_validation_failure_returns_first(monkeypatch):
     fix = _get_fixture("validation_failure_returns_first")
 

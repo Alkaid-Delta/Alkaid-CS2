@@ -20,7 +20,9 @@ if PROJECT_ROOT not in sys.path:
 import analyze_arbitrage as aa  # noqa: E402
 
 LEGACY_OK = {"market_hash_name": "AK-47 | Redline (Field-Tested)",
-             "seller_price": 1000, "confidence": "high"}
+             "seller_price": 1000, "confidence": "high",
+             # Phase P2：legacy 成功路徑（字典命中）帶 verified
+             "verified": True, "verified_by": "trusted_dictionary_exact"}
 
 
 def make_post(text, currency=None, post_id="p1"):

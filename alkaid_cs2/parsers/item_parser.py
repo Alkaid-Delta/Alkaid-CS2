@@ -12,6 +12,15 @@ import re
 
 from alkaid_cs2.domain.item_candidate import ItemCandidate, ItemEvidence, ItemRole
 
+# Phase P2.1：模組級 canonical validator（延遲初始化）
+_PARSER_VALIDATOR = None
+def _get_parser_validator():
+    global _PARSER_VALIDATOR
+    if _PARSER_VALIDATOR is None:
+        from alkaid_cs2.services.item_validator import ItemValidator
+        _PARSER_VALIDATOR = ItemValidator()
+    return _PARSER_VALIDATOR
+
 # ── 刀/手套類（需要 ★ 前綴）──
 STAR_WEAPONS = {
     "Butterfly Knife", "Karambit", "Bayonet", "Flip Knife", "Huntsman Knife",
@@ -284,14 +293,25 @@ def parse_item_candidates(
         return []
 
     # 1. 收集所有原始 match span（不第一命中 return）
+    # Phase P2.1：命中需詞邊界（前後不得是字母/數字/中文）——避免
+    # 「半件AK-47 | 红线複製品」這類 substring 被當 exact 商品命中
+    def _has_boundary(txt: str, start: int, end: int) -> bool:
+        before = txt[start - 1] if start > 0 else ""
+        after = txt[end] if end < len(txt) else ""
+        return not (before and (before.isalnum() or "\u4e00" <= before <= "\u9fff")) \
+            and not (after and (after.isalnum() or "\u4e00" <= after <= "\u9fff"))
+
     spans: list[tuple[int, int, str, str, str]] = []  # (start, end, kind, cn, en)
     for cn_full, en_full in full_dict.items():
         if len(cn_full) < 2:
             continue
         idx = text.find(cn_full)
         while idx != -1:
-            spans.append((idx, idx + len(cn_full), "full", cn_full, en_full))
+            if _has_boundary(text, idx, idx + len(cn_full)):
+                spans.append((idx, idx + len(cn_full), "full", cn_full, en_full))
             idx = text.find(cn_full, idx + 1)
+    # pattern 命中不要求詞邊界（「14卡托红线」等術語正常）——
+    # pattern candidate 一律 unverified，由 canonical 驗證把關
     for cn, en in pattern_dict.items():
         if len(cn) < 2:
             continue
@@ -343,6 +363,9 @@ def parse_item_candidates(
                 evidence=ItemEvidence.DICT_FULL,
                 confidence=0.95,
                 score=100.0,
+                # Phase P2：受信任字典 exact 命中 → verified
+                verified=True,
+                verified_by="trusted_dictionary_exact",
             ))
         else:
             # pattern 候選：segment 內找武器
@@ -350,6 +373,21 @@ def parse_item_candidates(
                                     segment_start=seg_start, segment_end=seg_end)
             star = _star_needed(weapon)
             mhn = _build_mhn(weapon, en, wear, stattrak, star)
+            # Phase P2.1：pattern 命中預設 unverified（candidate 語意——
+            # validation_error 留給 ItemValidator 正式驗證結果；
+            # 最終由 process_posts 的 hard gate 阻擋未驗證查價）
+            p_verified = False
+            p_verified_by = None
+            p_validation_error = None
+            if weapon and mhn:
+                try:
+                    if _get_parser_validator().validate_market_name(mhn):
+                        p_verified = True
+                        p_verified_by = "canonical_catalog"
+                        p_validation_error = None
+                except RuntimeError:
+                    # catalog 不可用 → fail-closed unverified
+                    pass
             raw.append(ItemCandidate(
                 market_hash_name=mhn,
                 weapon=weapon,
@@ -365,6 +403,9 @@ def parse_item_candidates(
                 evidence=ItemEvidence.DICT_PATTERN,
                 confidence=0.85 if weapon else 0.60,
                 score=(84.0 if weapon else 62.0),
+                verified=p_verified,
+                verified_by=p_verified_by,
+                validation_error=p_validation_error,
             ))
 
     return _dedup(raw)

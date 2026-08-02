@@ -25,9 +25,13 @@ PATTERN_DICT = {"红线": "Redline", "紅線": "Redline", "火神": "Vulcan"}
 WEAPON_MAP = {"AK-47": "AK-47"}
 
 LEGACY_OK = {"market_hash_name": "AK-47 | Redline (Field-Tested)",
-             "seller_price": 5000, "confidence": "high"}
+             "seller_price": 5000, "confidence": "high",
+             # Phase P2：legacy 成功路徑（字典命中）帶 verified
+             "verified": True, "verified_by": "trusted_dictionary_exact"}
 LEGACY_RMB = {"market_hash_name": "AK-47 | Redline (Field-Tested)",
-              "seller_price": 1000, "confidence": "high"}
+              "seller_price": 1000, "confidence": "high",
+              # Phase P2：legacy 成功路徑（字典命中）帶 verified
+              "verified": True, "verified_by": "trusted_dictionary_exact"}
 
 
 def fake_legacy(text):

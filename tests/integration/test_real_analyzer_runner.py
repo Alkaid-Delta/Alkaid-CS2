@@ -174,14 +174,33 @@ def test_no_http_urls_in_evaluation_real():
 
 
 def test_production_files_unchanged():
+    """Phase-aware allowlist guard（P2.1 方案 B）。
+
+    目前工作樹允許的變更僅限 P2 核准檔案；任何其他 production 檔案
+    （含 B2 evaluation/、crawler、bridge、vision、dict）被修改即失敗。
+    未來新階段加入時，須由人工更新此 allowlist。
+    """
     r = subprocess.run(["git", "diff", "--name-only"],
                        capture_output=True, text=True, cwd=PROJECT_ROOT)
-    banned = ("cdp_fb_crawler", "analyze_arbitrage", "production_bridge",
-              "vision_production", "vision_adapter", "crawler_vision",
-              "adapters/", "services/", "pipeline/", "skin_dict")
+    allowed = {
+        # Phase P2 / P2.1 核准檔案
+        "alkaid_cs2/services/item_validator.py",
+        "alkaid_cs2/parsers/item_parser.py",
+        "alkaid_cs2/adapters/legacy_adapter.py",
+        "analyze_arbitrage.py",
+        "tests/unit/test_item_validator.py",
+        "tests/integration/test_validation_hard_gate.py",
+        "tests/integration/test_controlled_integration.py",
+        "tests/integration/test_vision_controlled_integration.py",
+        "tests/integration/test_real_analyzer_runner.py",
+        "tests/regression/legacy_adapter.py",
+        "tests/regression/test_golden_posts.py",
+        "tests/regression/fixtures/posts.json",
+        "tests/regression/fixtures/expected.json",
+        "docs/phase2-validation-hard-gate.md",
+    }
     for f in r.stdout.splitlines():
-        for b in banned:
-            assert b not in f, f"production 檔案被修改：{f}"
+        assert f in allowed, f"非核准檔案被修改：{f}"
 
 
 # ================================================================

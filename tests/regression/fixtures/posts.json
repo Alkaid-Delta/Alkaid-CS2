@@ -52,7 +52,10 @@
   {
     "id": "multi_image_second_has_price",
     "text": "[圖片] 售 AK-47 | 红线 久经沙场",
-    "images": ["img1_no_price", "img2_with_price"],
+    "images": [
+      "img1_no_price",
+      "img2_with_price"
+    ],
     "notes": "Second image contains price; crawler breaks after first successful image",
     "known_defect": "first_image_break: only first successful image processed, price lost",
     "requires_crawler": true
@@ -90,6 +93,64 @@
     "text": "售 AK-47 | 红线 久经沙场",
     "images": [],
     "notes": "Selling post without price: item resolvable, seller_price must be null/-1",
+    "known_defect": null
+  },
+  {
+    "id": "p2_unknown_model_item",
+    "text": "售 神秘皮膚XYZ 5000",
+    "images": [],
+    "notes": "P2: model-generated unknown name → unresolved（不得進查價）",
+    "known_defect": null
+  },
+  {
+    "id": "p2_retry_succeeds",
+    "text": "售 夜行衣 久經 5000",
+    "images": [],
+    "notes": "P2: 第一次 LLM 名失敗、retry 成功 → verified",
+    "known_defect": null
+  },
+  {
+    "id": "p2_retry_fails_twice",
+    "text": "售 完全不存在之皮膚 5000",
+    "images": [],
+    "notes": "P2: 兩次驗證失敗 → unresolved（L594 修正驗證）",
+    "known_defect": null
+  },
+  {
+    "id": "p2_trusted_dict_exact",
+    "text": "售 沙漠之鹰 | 东方之谜 崭新出厂 6000",
+    "images": [],
+    "notes": "P2: trusted dictionary exact match → verified",
+    "known_defect": null
+  },
+  {
+    "id": "p2_alias_canonical",
+    "text": "售 沙鹰 东方之谜 崭新 6000",
+    "images": [],
+    "notes": "P2: alias 正規化 → verified_by normalized_catalog_alias",
+    "known_defect": null
+  },
+  {
+    "id": "p2_vision_only_unverified",
+    "text": "[圖片] 售 未知武器皮膚 5000",
+    "images": [
+      "inline://p2-vision-1"
+    ],
+    "notes": "P2: vision-only 名稱未經 catalog → 不得 verified",
+    "known_defect": null
+  },
+  {
+    "id": "p2_safe_fallback_attempted",
+    "text": "售 神秘皮膚 5000",
+    "images": [],
+    "notes": "P2: safe-mode fallback 不得繞過 validation（legacy 未驗證 → blocked）",
+    "known_defect": null
+  },
+  {
+    "id": "p2_validator_unavailable",
+    "text": "售 某皮膚 5000",
+    "images": [],
+    "notes": "P2: validator service unavailable → fail-closed",
     "known_defect": null
   }
 ]

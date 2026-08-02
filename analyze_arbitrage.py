@@ -22,6 +22,10 @@ import sqlite3
 import re
 from datetime import datetime, time as dtime
 
+from alkaid_cs2.services.item_validator import (  # noqa: E402
+    require_verified_market_item,
+)
+
 # ============================================================
 # 路徑設定
 # ============================================================
@@ -398,21 +402,131 @@ def _load_v2_dicts() -> tuple[dict, dict]:
     return {}, {}
 
 
+_LEGACY_VALIDATOR = None
+
+
+def _get_legacy_validator():
+    """延遲初始化 ItemValidator（每 candidate 不重讀 catalog）。"""
+    global _LEGACY_VALIDATOR
+    if _LEGACY_VALIDATOR is None:
+        from alkaid_cs2.services.item_validator import ItemValidator
+        _LEGACY_VALIDATOR = ItemValidator()
+    return _LEGACY_VALIDATOR
+
+
+# Phase P2.4：LLM API transport 具體例外（openai SDK，deepseek 相容）
+try:
+    from openai import (  # noqa: F401
+        APIError,
+        APIConnectionError,
+        APITimeoutError,
+        RateLimitError,
+    )
+    _LLM_TRANSPORT_ERRORS = (
+        APIError, APIConnectionError, APITimeoutError, RateLimitError)
+except ImportError:
+    _LLM_TRANSPORT_ERRORS = ()
+
+
+def _call_legacy_llm_json(
+    client,
+    *,
+    prompt: str,
+    temperature: float,
+) -> dict | None:
+    """LLM transport + JSON parse 邊界（P2.4）。
+
+    只負責單一 API 呼叫與 parse；回傳 dict 或 None（失敗）。
+    只捕捉具體預期例外：JSON parse（JSONDecodeError/TypeError/
+    AttributeError）與 SDK transport（_LLM_TRANSPORT_ERRORS）。
+    不含任何本地 validation 邏輯。
+    """
+    try:
+        resp = client.chat.completions.create(
+            model=MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=temperature,
+            max_tokens=200,
+            response_format={"type": "json_object"},
+        )
+        content = resp.choices[0].message.content
+        if not isinstance(content, str) or not content.strip():
+            return None
+        return json.loads(content)
+    except (json.JSONDecodeError, TypeError, AttributeError):
+        return None
+    except _LLM_TRANSPORT_ERRORS:
+        return None
+
+
+def _apply_validation_result(
+    payload: dict,
+    result: dict[str, object],
+) -> dict:
+    """把 ItemValidationResult（dict 化）套用至 payload（P2.4）。
+
+    建立新 dict（不原地修改 caller payload）；verified metadata
+    （market_hash_name/verified/verified_by/validation_error/
+    validation_attempts）完全來自 result——不接受 caller 提供的
+    任何 verified 值。seller_price/confidence 從 payload 保留。
+    """
+    out = dict(payload)
+    out["market_hash_name"] = result.get("market_hash_name")
+    verified = result.get("verified")
+    if verified is not True:
+        verified = False
+    out["verified"] = verified
+    out["verified_by"] = result.get("verified_by")
+    out["validation_error"] = result.get("validation_error")
+    out["validation_attempts"] = result.get("attempts")
+    return out
+
+
+def _validate_legacy_candidate(
+    market_hash_name: str,
+    *,
+    source: str,
+) -> dict[str, object]:
+    """legacy candidate → 同一 ItemValidator canonical 驗證（P2.3）。
+
+    只做 ItemValidationResult → dict 結構轉換；verified metadata
+    （verified/verified_by/validation_error/canonical name）完全來自
+    ItemValidator，本 helper 不自行宣告任何 verified 值。
+    """
+    try:
+        validator = _get_legacy_validator()
+        result = validator.validate_candidate(
+            market_hash_name, source=source)
+        return {
+            "market_hash_name": result.canonical_market_hash_name,
+            "verified": result.verified,
+            "verified_by": result.verified_by,
+            "validation_error": result.validation_error,
+            "attempts": result.attempts,
+            "original_name": result.original_name,
+        }
+    except RuntimeError as exc:
+        # catalog 不可用 → fail-closed（由 process_posts 邊界捕捉）
+        raise RuntimeError("item_validator_catalog_unavailable") from exc
+
+
 def extract_skin_info(post_text: str) -> dict | None:
     # 先查對照表
     import os, json as _json
     dict_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "skin_dict.json")
-    if os.path.exists(dict_path):
-        try:
-            with open(dict_path, "r", encoding="utf-8") as f:
-                dict_data = _json.load(f)
-            skin_dict = dict_data.get("pattern_cn_to_en", {})
-            full_dict = dict_data.get("full_cn_to_en", {})
+    if not os.path.exists(dict_path):
+        # Phase P2.2：catalog 不可用 → fail-closed（不得落入 LLM）
+        raise RuntimeError("item_validator_catalog_unavailable")
+    try:
+        with open(dict_path, "r", encoding="utf-8") as f:
+            dict_data = _json.load(f)
+        skin_dict = dict_data.get("pattern_cn_to_en", {})
+        full_dict = dict_data.get("full_cn_to_en", {})
 
-            # ── 第一優先: 完整名稱直接對照 ──
-            # 例如 Vision 讀到「沙漠之鹰 | 东方之谜」→ 直接對「Desert Eagle | Eastern Enigma」
-            for cn_full, en_full in full_dict.items():
-                if cn_full in post_text:
+        # ── 第一優先: 完整名稱直接對照 ──
+        # 例如 Vision 讀到「沙漠之鹰 | 东方之谜」→ 直接對「Desert Eagle | Eastern Enigma」
+        for cn_full, en_full in full_dict.items():
+            if cn_full in post_text:
                     print(f"  [字典] ✅ 完整名命中: {cn_full} → {en_full}")
                     # 判斷磨損度 (簡繁相反陷阱已處理)
                     wear_en = _wear_to_en(post_text)
@@ -436,7 +550,15 @@ def extract_skin_info(post_text: str) -> dict | None:
                         candidates = re.findall(r'(?<![\d.])(\d{3,})(?:NT|TWD|\$)?', text_clean)
                         if candidates:
                             price = int(candidates[-1])
-                    return {"market_hash_name": full_name, "seller_price": price, "confidence": "high"}
+                    # Phase P2.2：dictionary 命中只是 candidate evidence，
+                    # verified 必須經同一 ItemValidator canonical 驗證
+                    vres = _validate_legacy_candidate(
+                        full_name, source="legacy_dict_full")
+                    return {"market_hash_name": vres["market_hash_name"],
+                            "seller_price": price, "confidence": "high",
+                            "verified": vres["verified"],
+                            "verified_by": vres["verified_by"],
+                            "validation_error": vres["validation_error"]}
 
             # ── 第二優先: 花紋對照 + 武器拼裝 ──
             # 武器中英對照（保留武器前綴用）
@@ -504,9 +626,18 @@ def extract_skin_info(post_text: str) -> dict | None:
                             candidates = re.findall(r'(?<![\d.])(\d{3,})(?:NT|TWD|\$)?', text_clean)
                             if candidates:
                                 price = int(candidates[-1])
-                    return {"market_hash_name": full_name, "seller_price": price, "confidence": "high"}
-        except Exception:
-            pass
+                    # Phase P2.2：pattern 命中只是 candidate evidence；
+                    # 組裝名稱經同一 ItemValidator canonical 驗證
+                    vres = _validate_legacy_candidate(
+                        full_name, source="legacy_dict_pattern")
+                    return {"market_hash_name": vres["market_hash_name"],
+                            "seller_price": price, "confidence": "high",
+                            "verified": vres["verified"],
+                            "verified_by": vres["verified_by"],
+                            "validation_error": vres["validation_error"]}
+    except (OSError, _json.JSONDecodeError) as exc:
+        # Phase P2.2：catalog 讀取失敗 → fail-closed（不得靜默落入 LLM）
+        raise RuntimeError("item_validator_catalog_unavailable") from exc
 
     client = create_client()
     if not client:
@@ -550,51 +681,67 @@ def extract_skin_info(post_text: str) -> dict | None:
 3. confidence:信心程度(high / medium / low)
 
 只回傳 JSON:{{"market_hash_name":"...","seller_price":0,"confidence":"high"}}"""
-    try:
-        resp = client.chat.completions.create(
-            model=MODEL, messages=[{"role": "user", "content": prompt}],
-            temperature=0.1, max_tokens=200,
-            response_format={"type": "json_object"},
-        )
-        data = json.loads(resp.choices[0].message.content)
-        if data.get("market_hash_name") == "NONE":
-            return None
-        
-        # 自動驗證皮膚名稱是否存在於 csgoskins.gg
-        mhn = data.get("market_hash_name", "")
-        if mhn and _verify_skin_on_csgoskins(mhn):
-            return data
-        
-        # 驗證失敗 → 重試一次
-        print(f"  [驗證] ⚠️ '{mhn}' 不存在,重新翻譯...")
-        retry_prompt = f"""CS2 皮膚名稱翻譯錯誤.請重新翻譯.
+    # Phase P2.4：初次 LLM 呼叫（transport + parse 邊界在 helper 內）
+    data = _call_legacy_llm_json(client, prompt=prompt, temperature=0.1)
+    if data is None:
+        # transport / parse 失敗 → 安全 unresolved（fail-closed）
+        return {
+            "market_hash_name": None,
+            "verified": False,
+            "verified_by": None,
+            "validation_error": "item_validation_service_unavailable",
+            "seller_price": -1,
+            "confidence": "low",
+        }
+    if data.get("market_hash_name") == "NONE":
+        return None
+
+    # 自動驗證皮膚名稱是否存在於 csgoskins.gg（transport try 外）
+    mhn = data.get("market_hash_name", "")
+    if mhn and _verify_skin_on_csgoskins(mhn):
+        # Phase P2.4：外部驗證成功仍須本地 ItemValidator；metadata 完整
+        # 透傳 ItemValidationResult（不重建 verified_by）
+        vres = _validate_legacy_candidate(mhn, source="legacy_llm")
+        if vres["verified"] is True:
+            out = _apply_validation_result(data, vres)
+            return out
+        print(f"  [驗證] ⚠️ '{mhn}' 不在本地 canonical catalog")
+
+    # 驗證失敗 → 重試一次（transport + parse 邊界在 helper 內）
+    print(f"  [驗證] ⚠️ '{mhn}' 不存在,重新翻譯...")
+    retry_prompt = f"""CS2 皮膚名稱翻譯錯誤.請重新翻譯.
 
 原貼文: {post_text}
 上次給的: {mhn} ← 這不存在於 csgoskins.gg
 
 請重新給一個正確的英文 market_hash_name(含磨損).
 回答 JSON: {{"market_hash_name":"...","seller_price":0,"confidence":"medium"}}"""
-        try:
-            resp2 = client.chat.completions.create(
-                model=MODEL, messages=[{"role": "user", "content": retry_prompt}],
-                temperature=0.3, max_tokens=200,
-                response_format={"type": "json_object"},
-            )
-            data2 = json.loads(resp2.choices[0].message.content)
-            if data2.get("market_hash_name") and data2["market_hash_name"] != "NONE":
-                mhn2 = data2["market_hash_name"]
-                if _verify_skin_on_csgoskins(mhn2):
-                    data2["seller_price"] = data.get("seller_price", data2.get("seller_price", -1))
-                    print(f"  [驗證] ✅ 重試成功: {mhn2}")
-                    return data2
-                else:
-                    print(f"  [驗證] ❌ 重試仍失敗: {mhn2}")
-        except Exception:
-            pass
-        return data
-    except Exception as e:
-        print(f"  [錯誤] DeepSeek 提取失敗:{e}")
-        return None
+    data2 = _call_legacy_llm_json(client, prompt=retry_prompt,
+                                  temperature=0.3)
+    # 本地 validation 在 transport try 外——programming errors 不得吞掉
+    if data2 and data2.get("market_hash_name") and data2["market_hash_name"] != "NONE":
+        mhn2 = data2["market_hash_name"]
+        if _verify_skin_on_csgoskins(mhn2):
+            data2["seller_price"] = data.get("seller_price", data2.get("seller_price", -1))
+            # Phase P2.4：retry metadata 完整透傳（同一 helper）
+            vres2 = _validate_legacy_candidate(mhn2, source="legacy_llm_retry")
+            if vres2["verified"] is True:
+                out2 = _apply_validation_result(data2, vres2)
+                print(f"  [驗證] ✅ 重試成功: {mhn2}")
+                return out2
+            print(f"  [驗證] ❌ 重試名稱不在本地 catalog: {mhn2}")
+        else:
+            print(f"  [驗證] ❌ 重試仍失敗: {mhn2}")
+    # Phase P2：驗證兩次失敗不得回傳第一次未驗證名稱（原 L594 缺陷）
+    # → 回傳結構化 unresolved 結果（market lookup gate 會阻擋）
+    return {
+        "market_hash_name": None,
+        "verified": False,
+        "verified_by": None,
+        "validation_error": "item_validation_retry_failed",
+        "seller_price": data.get("seller_price", -1),
+        "confidence": "low",
+    }
 
 
 def _verify_skin_on_csgoskins(market_hash_name: str) -> bool:
@@ -946,7 +1093,13 @@ def process_posts(posts: list[dict]) -> list[dict]:
         mode = get_v2_parser_mode()
         if mode == "off":
             print("  [1/3] DeepSeek 提取皮膚...")
-            info = extract_skin_info(post.get("content", ""))
+            try:
+                info = extract_skin_info(post.get("content", ""))
+            except RuntimeError as exc:
+                # Phase P2：validator service unavailable → fail-closed
+                print(f"  [1/3] ⛔ 驗證服務不可用, skip: {exc}")
+                processed_ids.append(post.get("id", ""))
+                continue
             if info is None:
                 processed_ids.append(post.get("id", ""))
                 continue
@@ -958,6 +1111,14 @@ def process_posts(posts: list[dict]) -> list[dict]:
                 print("  [1/3] ⚠️ 無價格,跳過")
                 processed_ids.append(post.get("id", ""))
                 continue
+            # Phase P2：market lookup 最後防線（mode=off 亦作用）
+            verified_item = require_verified_market_item(info)
+            if verified_item is None:
+                print("  [2/3] ⛔ P2 gate: 未驗證商品 blocked "
+                      f"({info.get('validation_error', 'no_verified_flag')})")
+                processed_ids.append(post.get("id", ""))
+                continue
+            mh = verified_item.market_hash_name
             print(f"  [1/3] ✅ {mh} | NT${sp:,.0f} | {conf}")
             post["_seller_price"] = sp
         else:
@@ -997,6 +1158,14 @@ def process_posts(posts: list[dict]) -> list[dict]:
                 print("  [1/3] ⚠️ 無有效價格,跳過")
                 processed_ids.append(post.get("id", ""))
                 continue
+            # Phase P2：market lookup 最後防線（mode=off 亦作用）
+            verified_item = require_verified_market_item(data)
+            if verified_item is None:
+                print("  [2/3] ⛔ P2 gate: 未驗證商品 blocked "
+                      f"({data.get('validation_error', 'no_verified_flag')})")
+                processed_ids.append(post.get("id", ""))
+                continue
+            mh = verified_item.market_hash_name
             print(f"  [1/3] ✅ [{result.source}] {mh} | NT${sp:,.0f} | {conf}")
             post["_seller_price"] = sp
 

@@ -47,13 +47,15 @@ def extract_legacy(post_text: str, *, verify_fn=None) -> dict:
     finally:
         aa._verify_skin_on_csgoskins = original_verify
 
-    if info is None:
+    if info is None or info.get("verified") is not True or \
+            not info.get("market_hash_name"):
+        # Phase P2：未驗證 / unresolved 結構 → unresolved
         return {
             "status": "unresolved",
             "market_hash_name": None,
-            "seller_price": -1,
+            "seller_price": info.get("seller_price", -1) if info else -1,
             "currency": None,
-            "confidence": None,
+            "confidence": info.get("confidence") if info else None,
         }
 
     return {
