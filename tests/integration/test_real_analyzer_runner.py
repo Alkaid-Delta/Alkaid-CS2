@@ -343,7 +343,13 @@ def _repo_local_snapshot():
     return snapshot
 
 
-def test_repository_local_data_untouched_by_tests(tmp_path):
+def _assert_repository_local_data_untouched(tmp_path):
+    """共用隔離流程（Phase 6.4C2-B0.3/B2-A.3）：非 test helper。
+
+    抽成 helper 而非 test 呼叫 test：避免 fixture/monkeypatch 邊界錯誤
+    （test 直接呼叫 test 時 tmp_path 是呼叫者的，fixture 不會重新解析，
+    造成 subprocess 與 cleanup race）。
+    """
     # 完整隔離流程（Phase 6.4C2-B0.3）：顯式傳所有路徑 + override
     before = _repo_local_snapshot()
     import importlib.util
@@ -379,6 +385,11 @@ def test_repository_local_data_untouched_by_tests(tmp_path):
     # 斷言 6：tmp cache 不存在或為空
     cache = tmp_path / "local_data" / "cache"
     assert not cache.exists() or list(cache.iterdir()) == []
+
+def test_repository_local_data_untouched_by_tests(tmp_path):
+    _assert_repository_local_data_untouched(tmp_path)
+
+
 
 
 def test_blocked_run_creates_exactly_one_current_audit(tmp_path):
@@ -488,7 +499,8 @@ def test_sentinel_case_id_not_echoed(tmp_path, capsys):
     assert audit["eligible_image_count"] == 1
 
 
-def test_sentinel_case_id_not_in_plan():
+def _assert_sentinel_case_id_not_in_plan():
+    """共用 sentinel 流程（Phase 6.4C2-B0.3/B2-A.3）：非 test helper。"""
     # plan serialized 不含原 case ID（plan 只存 opaque key）
     from alkaid_cs2.evaluation.external_analyzer_runner import (
         build_execution_plan,
@@ -503,6 +515,9 @@ def test_sentinel_case_id_not_in_plan():
     assert SECRET_CASE_ID not in d, "plan 不含原 case ID"
     assert all(len(k) == 64 and k.isalnum() for k in plan.case_keys)
 
+
+def test_sentinel_case_id_not_in_plan():
+    _assert_sentinel_case_id_not_in_plan()
 
 def test_eligible_sentinel_uses_only_opaque_key(tmp_path):
     # authorized dry-run：plan.case_count==1、image_count>0、keys 64-hex
@@ -943,7 +958,7 @@ def test_preexisting_env_survives_repository_snapshot_test(
         tmp_path, monkeypatch):
     monkeypatch.setenv(ENV_FLAG, "pre-existing")
     _empty_manifest(tmp_path)
-    test_repository_local_data_untouched_by_tests(tmp_path)
+    _assert_repository_local_data_untouched(tmp_path)
     assert os.environ.get(ENV_FLAG) == "pre-existing", \
         "repository snapshot 測試後 env 必須恢復"
 
@@ -951,7 +966,7 @@ def test_preexisting_env_survives_repository_snapshot_test(
 def test_preexisting_env_survives_sentinel_plan_test(tmp_path, monkeypatch):
     monkeypatch.setenv(ENV_FLAG, "pre-existing")
     _empty_manifest(tmp_path)
-    test_sentinel_case_id_not_in_plan()
+    _assert_sentinel_case_id_not_in_plan()
     assert os.environ.get(ENV_FLAG) == "pre-existing", \
         "sentinel plan 測試後 env 必須恢復"
 
@@ -1036,11 +1051,11 @@ def test_external_tmp_to_tmp_rename_replace_allowed(tmp_path, monkeypatch):
 # Phase 6.4C2-B0.6 — Outer env restoration (parameterized flows)
 # ================================================================
 def _repository_snapshot_flow(tmp_path):
-    test_repository_local_data_untouched_by_tests(tmp_path)
+    _assert_repository_local_data_untouched(tmp_path)
 
 
 def _sentinel_cli_flow(tmp_path):
-    test_sentinel_case_id_not_in_plan()
+    _assert_sentinel_case_id_not_in_plan()
 
 
 def _isolated_helper_flow(tmp_path):

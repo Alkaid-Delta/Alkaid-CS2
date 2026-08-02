@@ -22,6 +22,7 @@ from alkaid_cs2.evaluation.intake_validation import (
 
 AUDIT_SCHEMA_VERSION = "analyzer-audit-v1"
 AUDIT_SCHEMA_VERSION_V2 = "external-analyzer-audit-v2"
+AUDIT_SCHEMA_VERSION_V3 = "external-analyzer-audit-v3"
 
 ALLOWED_AUDIT_FIELDS = frozenset({
     "schema_version", "run_id", "started_at", "completed_at", "dry_run",
@@ -35,6 +36,18 @@ ALLOWED_AUDIT_FIELDS = frozenset({
 ALLOWED_AUDIT_FIELDS_V2 = ALLOWED_AUDIT_FIELDS | frozenset({
     "processed_image_count", "cache_hit_count", "cache_miss_count",
     "cache_invalid_count", "analyzer_name", "analyzer_version",
+})
+
+# Phase 6.4C2-B2-A：v3 從 v2 延伸，新增 authorization/network 欄位
+ALLOWED_AUDIT_FIELDS_V3 = ALLOWED_AUDIT_FIELDS_V2 | frozenset({
+    "authorization_env_accepted",
+    "authorization_context_present",
+    "authorization_context_valid",
+    "authorization_decision",
+    "authorization_context_digest",
+    "network_policy_version",
+    "requested_network_call_count",
+    "allowed_network_call_count",
 })
 
 ALLOWED_AUDIT_RESULTS = frozenset(
@@ -92,6 +105,19 @@ def hash_image_hashes(image_hashes: list[str]) -> list[str]:
             for h in image_hashes]
 
 
+# Phase 6.4C2-B2-A.1/B2-A.3：union 授權/網路政策固定碼
+# （直接 import；import 失敗模組必須直接失敗，不得 fail-open 降低 allowlist）
+from alkaid_cs2.evaluation.authorization_context import (  # noqa: E402
+    AUTHORIZATION_ALL_ERROR_CODES,
+)
+from alkaid_cs2.evaluation.network_policy import (  # noqa: E402
+    NETWORK_POLICY_ERROR_CODES,
+)
+
+KNOWN_ERROR_CODES = KNOWN_ERROR_CODES | AUTHORIZATION_ALL_ERROR_CODES \
+    | NETWORK_POLICY_ERROR_CODES
+
+
 def validate_audit_manifest(audit: dict) -> list[str]:
     """嚴格 audit schema 驗證（Phase 6.4C2-B0.1 / B1 v2）；回傳錯誤清單。
 
@@ -104,6 +130,8 @@ def validate_audit_manifest(audit: dict) -> list[str]:
         allowed = ALLOWED_AUDIT_FIELDS
     elif version == AUDIT_SCHEMA_VERSION_V2:
         allowed = ALLOWED_AUDIT_FIELDS_V2
+    elif version == AUDIT_SCHEMA_VERSION_V3:
+        allowed = ALLOWED_AUDIT_FIELDS_V3
     else:
         return ["schema_version_invalid"]
     unknown = set(audit) - allowed
@@ -122,18 +150,61 @@ def validate_audit_manifest(audit: dict) -> list[str]:
     count_fields = ["eligible_case_count", "eligible_image_count",
                     "attempted_image_count", "succeeded_image_count",
                     "failed_image_count", "cache_write_count"]
-    if version == AUDIT_SCHEMA_VERSION_V2:
+    if version in (AUDIT_SCHEMA_VERSION_V2, AUDIT_SCHEMA_VERSION_V3):
         count_fields += ["processed_image_count", "cache_hit_count",
                          "cache_miss_count", "cache_invalid_count"]
     for count_field in count_fields:
         v = audit.get(count_field)
         if isinstance(v, bool) or not isinstance(v, int) or v < 0:
             errors.append(f"{count_field}_invalid")
-    if version == AUDIT_SCHEMA_VERSION_V2:
+    if version in (AUDIT_SCHEMA_VERSION_V2, AUDIT_SCHEMA_VERSION_V3):
         for name_field in ("analyzer_name", "analyzer_version"):
             if not isinstance(audit.get(name_field), str) \
                     or not audit.get(name_field):
                 errors.append(f"{name_field}_invalid")
+    if version == AUDIT_SCHEMA_VERSION_V3:
+        # Phase 6.4C2-B2-A/B2-A.1：authorization/network 欄位嚴格驗證
+        for bool_field in ("authorization_env_accepted",
+                           "authorization_context_present",
+                           "authorization_context_valid",
+                           "authorization_decision"):
+            if not isinstance(audit.get(bool_field), bool):
+                errors.append(f"{bool_field}_invalid")
+        digest = audit.get("authorization_context_digest", "")
+        ctx_present = audit.get("authorization_context_present")
+        # B2-A.1：digest 與 context_present 的狀態關係
+        if ctx_present is True:
+            if not isinstance(digest, str) or not _SHA256_RE.match(digest):
+                errors.append("authorization_context_digest_invalid")
+        elif ctx_present is False:
+            if digest != "":
+                errors.append("authorization_context_digest_invalid")
+        else:
+            errors.append("authorization_context_digest_invalid")
+        # 狀態關係：context_valid=True → context_present=True
+        if audit.get("authorization_context_valid") is True \
+                and ctx_present is not True:
+            errors.append("authorization_context_state_invalid")
+        # 狀態關係：decision=True → 全部 gate True
+        if audit.get("authorization_decision") is True:
+            for gate_field in ("authorization_flag_present",
+                               "authorization_env_present",
+                               "authorization_env_accepted",
+                               "authorization_context_present",
+                               "authorization_context_valid"):
+                if audit.get(gate_field) is not True:
+                    errors.append("authorization_decision_state_invalid")
+                    break
+        npv = audit.get("network_policy_version", "")
+        if not isinstance(npv, str) or not npv:
+            errors.append("network_policy_version_invalid")
+        for count_field in ("requested_network_call_count",
+                            "allowed_network_call_count"):
+            v = audit.get(count_field)
+            if isinstance(v, bool) or not isinstance(v, int) or v < 0:
+                errors.append(f"{count_field}_invalid")
+            elif v != 0:
+                errors.append(f"{count_field}_nonzero")
     succeeded = audit.get("succeeded_image_count", 0)
     failed = audit.get("failed_image_count", 0)
     attempted = audit.get("attempted_image_count", 0)
@@ -143,7 +214,7 @@ def validate_audit_manifest(audit: dict) -> list[str]:
             # v1：attempted = 處理 image 數（含 hit/miss）
             if succeeded + failed > attempted:
                 errors.append("count_sum_exceeds_attempted")
-    if version == AUDIT_SCHEMA_VERSION_V2:
+    if version in (AUDIT_SCHEMA_VERSION_V2, AUDIT_SCHEMA_VERSION_V3):
         processed = audit.get("processed_image_count", 0)
         hits = audit.get("cache_hit_count", 0)
         misses = audit.get("cache_miss_count", 0)
@@ -179,7 +250,23 @@ def validate_audit_manifest(audit: dict) -> list[str]:
             not all(isinstance(h, str) and _SHA256_RE.match(h)
                     for h in hashes):
         errors.append("image_hash_hashes_invalid")
-    findings = scan_redaction_issues(audit)
+    # Phase 6.4C2-B2-A.3：privacy scan 前 sanitize 受控欄位
+    # （run_id 格式已由 _RUN_ID_RE 驗證，為受控 ID 非敏感資料；
+    #  但 12-hex 片段偶發全數字會誤觸 long_numeric_id heuristic）
+    scan_target = audit
+    run_id_value = audit.get("run_id")
+    if isinstance(run_id_value, str) and _RUN_ID_RE.match(run_id_value):
+        scan_target = dict(audit)
+        scan_target["run_id"] = "run-" + "f" * 12
+    # Phase 6.4C2-B2-A：v3 的 authorization_context_digest 是受控 hash 欄位
+    # （格式已驗證）；privacy scan 用 sanitized copy 避免 base64 heuristic
+    # 誤判（不修改 intake_validation 全域豁免清單）
+    if version == AUDIT_SCHEMA_VERSION_V3 and isinstance(
+            audit.get("authorization_context_digest"), str):
+        if scan_target is audit:
+            scan_target = dict(audit)
+        scan_target["authorization_context_digest"] = "controlled-hash-field"
+    findings = scan_redaction_issues(scan_target)
     for f in findings:
         if f.severity == "error":
             errors.append(f"privacy:{f.code}:{f.field}")
