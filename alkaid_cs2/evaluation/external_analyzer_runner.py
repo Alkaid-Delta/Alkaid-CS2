@@ -775,3 +775,470 @@ def execute_external_analyzer_plan(
     return _summary(status, error_codes, processed=processed,
                     attempted=attempted, succeeded=succeeded, failed=failed,
                     hits=hits, misses=misses, invalid=invalid, writes=writes)
+
+
+# ================================================================
+# Phase 6.4C2-B2-B0.2 — Defensive preflight / safe blocked audit
+# ================================================================
+@dataclass(frozen=True)
+class SafeEligibleFacts:
+    """malformed eligible input 的安全 facts（B0.2）。"""
+
+    valid: bool
+    case_count: int
+    image_count: int
+    image_hashes: tuple[str, ...]
+    fixed_error_codes: tuple[str, ...] = ()
+
+
+def collect_safe_eligible_facts(eligible_cases: object) -> SafeEligibleFacts:
+    """安全收集 eligible facts（malformed 不 crash、不讀 bytes）。
+
+    - 必須 list/tuple；每項必須 EligibleAnalyzerCase
+    - storage_references/image_hashes 必須 list 且長度一致
+    - 每個 hash 必須 64 lowercase hex
+    - 不保存 case ID / storage reference
+    """
+    if not isinstance(eligible_cases, (list, tuple)):
+        return SafeEligibleFacts(
+            valid=False, case_count=0, image_count=0, image_hashes=(),
+            fixed_error_codes=("eligible_analyzer_cases_invalid",))
+    image_hashes: list[str] = []
+    errors: list[str] = []
+    for item in eligible_cases:
+        if not isinstance(item, EligibleAnalyzerCase):
+            errors.append("eligible_analyzer_cases_invalid")
+            continue
+        refs = item.storage_references
+        hashes = item.image_hashes
+        if not isinstance(refs, list) or not isinstance(hashes, list):
+            errors.append("eligible_analyzer_cases_invalid")
+            continue
+        if len(refs) != len(hashes):
+            errors.append("eligible_analyzer_cases_invalid")
+            continue
+        bad_hash = any(
+            not (isinstance(h, str) and len(h) == 64
+                 and all(c in "0123456789abcdef" for c in h))
+            for h in hashes)
+        if bad_hash:
+            errors.append("eligible_analyzer_cases_invalid")
+            continue
+        image_hashes.extend(hashes)
+    if errors:
+        return SafeEligibleFacts(
+            valid=False, case_count=0, image_count=0, image_hashes=(),
+            fixed_error_codes=tuple(dict.fromkeys(errors)))
+    return SafeEligibleFacts(
+        valid=True, case_count=len(eligible_cases),
+        image_count=len(image_hashes), image_hashes=tuple(image_hashes))
+
+
+def _safe_plan_run_id(plan: object) -> tuple[str, bool]:
+    """錯誤 plan 仍安全取得 trace run ID（不回顯 caller 值）。"""
+    if not isinstance(plan, ExternalAnalyzerExecutionPlan):
+        return f"run-{uuid.uuid4().hex[:12]}", False
+    return _safe_trace_run_id(plan.run_id)
+
+
+# ================================================================
+# Phase 6.4C2-B2-B0.1 — Plan structural preflight + safe policy version
+# ================================================================
+def _safe_network_policy_version(policy: object) -> str:
+    """invalid NetworkPolicy → 固定 sentinel（不回顯 caller 任意值）。
+
+    Phase 6.4C2-B2-B0.3：嚴格 exact-type 契約，不使用 try/except。
+    - type(policy) is NetworkPolicyV1（subclass 拒絕：避免覆寫 property/
+      __getattribute__ 在 security boundary 靜默接受擴張型別）
+    - 欄位存取前 exact-type 已成立，不需廣泛 exception 保護
+    """
+    from alkaid_cs2.evaluation.network_policy import (
+        NETWORK_POLICY_SCHEMA_VERSION,
+        NetworkPolicyV1,
+    )
+
+    if type(policy) is not NetworkPolicyV1:
+        return "invalid-policy"
+
+    if policy.schema_version != NETWORK_POLICY_SCHEMA_VERSION:
+        return "invalid-policy"
+
+    version = policy.policy_version
+    if not isinstance(version, str):
+        return "invalid-policy"
+    if not version or len(version) > 64:
+        return "invalid-policy"
+    if not all(c.isalnum() or c in ".-_" for c in version):
+        return "invalid-policy"
+    return version
+
+
+def validate_authorized_execution_plan(
+    *,
+    plan: "ExternalAnalyzerExecutionPlan",
+    eligible_cases: list["EligibleAnalyzerCase"],
+    authorization_input: "AuthorizationExecutionInputV1",
+    analyzer_name: str,
+) -> list[str]:
+    """B2-B0.2 plan structural preflight（型別先驗證，不 crash）。
+
+    每個欄位先驗證型別再使用；任何型別錯誤 → execution_plan_invalid。
+    """
+    errors: list[str] = []
+    if not isinstance(plan, ExternalAnalyzerExecutionPlan):
+        return ["execution_plan_invalid"]
+    # 型別檢查（B0.2：不得對錯誤型別呼叫 len/list/zip/iterate）
+    schema_ok = isinstance(plan.schema_version, str)
+    run_id_ok = isinstance(plan.run_id, str)
+    created_ok = isinstance(plan.created_at, str)
+    status_ok = isinstance(plan.status, str)
+    case_count_ok = (isinstance(plan.case_count, int)
+                     and not isinstance(plan.case_count, bool)
+                     and plan.case_count >= 0)
+    image_count_ok = (isinstance(plan.image_count, int)
+                      and not isinstance(plan.image_count, bool)
+                      and plan.image_count >= 0)
+    keys_ok = isinstance(plan.case_keys, list)
+    indexes_ok = isinstance(plan.image_indexes, list)
+    hashes_ok = isinstance(plan.expected_hashes, list)
+    adapter_ok = isinstance(plan.adapter_name, str)
+    auth_ok = isinstance(plan.authorized, bool)
+    dry_ok = isinstance(plan.dry_run, bool)
+    if not (schema_ok and run_id_ok and created_ok and status_ok
+            and case_count_ok and image_count_ok and keys_ok
+            and indexes_ok and hashes_ok and adapter_ok and auth_ok
+            and dry_ok):
+        errors.append("execution_plan_invalid")
+        return list(dict.fromkeys(errors))
+    if plan.schema_version != PLAN_SCHEMA_VERSION:
+        errors.append("execution_plan_invalid")
+    if not _is_valid_run_id(plan.run_id):
+        errors.append("execution_plan_invalid")
+    if not _is_valid_utc_timestamp(plan.created_at):
+        errors.append("execution_plan_invalid")
+    if plan.status not in ("planned", "blocked"):
+        errors.append("execution_plan_invalid")
+    # 內容型別檢查
+    bad_key = any(not (isinstance(k, str) and len(k) == 64
+                       and all(c in "0123456789abcdef" for c in k))
+                  for k in plan.case_keys)
+    bad_idx = any(not (isinstance(i, int) and not isinstance(i, bool)
+                       and i >= 0) for i in plan.image_indexes)
+    bad_hash = any(not (isinstance(h, str) and len(h) == 64
+                        and all(c in "0123456789abcdef" for c in h))
+                   for h in plan.expected_hashes)
+    if bad_key or bad_idx or bad_hash:
+        errors.append("execution_plan_invalid")
+        return list(dict.fromkeys(errors))
+    image_count = sum(len(c.image_hashes) for c in eligible_cases)
+    if plan.case_count != len(eligible_cases):
+        errors.append("execution_plan_count_mismatch")
+    if plan.image_count != image_count:
+        errors.append("execution_plan_count_mismatch")
+    if len(plan.case_keys) != image_count:
+        errors.append("execution_plan_count_mismatch")
+    if len(plan.image_indexes) != image_count:
+        errors.append("execution_plan_count_mismatch")
+    if len(plan.expected_hashes) != image_count:
+        errors.append("execution_plan_count_mismatch")
+    flat_hashes = [h for c in eligible_cases for h in c.image_hashes]
+    if list(plan.expected_hashes) != flat_hashes:
+        errors.append("execution_plan_hash_mismatch")
+    expected_indexes = [i for c in eligible_cases
+                        for i in range(len(c.image_hashes))]
+    if list(plan.image_indexes) != expected_indexes:
+        errors.append("execution_plan_hash_mismatch")
+    seen: set[tuple[str, int]] = set()
+    for key, idx in zip(plan.case_keys, plan.image_indexes):
+        item = (key, idx)
+        if item in seen:
+            errors.append("duplicate_execution_item")
+        seen.add(item)
+    if plan.adapter_name != analyzer_name:
+        errors.append("execution_adapter_identity_mismatch")
+    if authorization_input.requested_case_count != plan.case_count:
+        errors.append("authorization_requested_case_count_mismatch")
+    if authorization_input.requested_image_count != plan.image_count:
+        errors.append("authorization_requested_image_count_mismatch")
+    if authorization_input.expected_run_id != plan.run_id:
+        errors.append("authorization_expected_run_id_mismatch")
+    return list(dict.fromkeys(errors))
+
+
+# ================================================================
+# Phase 6.4C2-B2-B0 — Authorized execution wrapper（B0.2 防禦版）
+# ================================================================
+def _build_v3_audit(
+    *,
+    run_id: str,
+    started: str,
+    plan: ExternalAnalyzerExecutionPlan,
+    decision: AuthorizationDecision,
+    authorization_input: AuthorizationExecutionInputV1,
+    summary: ExternalAnalyzerExecutionSummary,
+    analyzer_name: str,
+    analyzer_version: str,
+    safe_counts: SafeEligibleFacts | None = None,
+) -> dict:
+    """組 Audit v3（B2-B0 最終 audit；不含敏感值）。
+
+    B0.2：eligible counts/hashes 用 safe facts（不信任 invalid plan）。
+    """
+    from alkaid_cs2.evaluation.analyzer_audit import (
+        AUDIT_SCHEMA_VERSION_V3, hash_image_hashes,
+    )
+    result_map = {
+        "completed": "completed",
+        "completed_with_failures": "completed_with_failures",
+        "failed": "failed",
+        "blocked": "blocked",
+    }
+    return {
+        "schema_version": AUDIT_SCHEMA_VERSION_V3,
+        "run_id": run_id,
+        "started_at": started,
+        "completed_at": _now_utc(),
+        "dry_run": False,
+        "authorization_flag_present":
+            decision.authorization_flag_present,
+        "authorization_env_present":
+            decision.authorization_env_present,
+        "authorization_env_accepted":
+            decision.authorization_env_accepted,
+        "authorization_context_present":
+            decision.authorization_context_present,
+        "authorization_context_valid":
+            decision.authorization_context_valid,
+        "authorization_decision": decision.authorized,
+        "authorization_context_digest":
+            decision.authorization_context_digest,
+        "network_policy_version": _safe_network_policy_version(
+            authorization_input.network_policy),
+        "eligible_case_count": (safe_counts.case_count if safe_counts
+                                else plan.case_count),
+        "eligible_image_count": (safe_counts.image_count if safe_counts
+                                 else plan.image_count),
+        "processed_image_count": summary.processed_image_count,
+        "attempted_image_count": summary.attempted_image_count,
+        "succeeded_image_count": summary.succeeded_image_count,
+        "failed_image_count": summary.failed_image_count,
+        "cache_hit_count": summary.cache_hit_count,
+        "cache_miss_count": summary.cache_miss_count,
+        "cache_invalid_count": summary.cache_invalid_count,
+        "cache_write_count": summary.cache_write_count,
+        "requested_network_call_count":
+            authorization_input.requested_network_calls,
+        "allowed_network_call_count": 0,
+        "result": result_map.get(summary.status, "failed"),
+        "fixed_error_codes": list(summary.fixed_error_codes),
+        "image_hash_hashes": hash_image_hashes(
+            list(safe_counts.image_hashes) if safe_counts
+            else plan.expected_hashes),
+        "analyzer_name": analyzer_name,
+        "analyzer_version": analyzer_version,
+    }
+
+
+def execute_authorized_external_analyzer_plan(
+    *,
+    plan: object,
+    eligible_cases: object,
+    loader: Any,
+    adapter: Any,
+    cache_dir: str | os.PathLike[str],
+    audit_dir: str | os.PathLike[str],
+    allowed_root: str | os.PathLike[str],
+    analyzer_name: str,
+    analyzer_version: str,
+    authorization_input: object,
+) -> ExternalAnalyzerExecutionSummary:
+    """B2-B0.2 正式授權執行 wrapper（防禦式）。
+
+    頂層安全（B0.2）：plan / authorization_input / eligible_cases 在任何
+    屬性存取前先做型別判斷；malformed → blocked（不 crash、零呼叫、
+    成功寫合法 Audit v3、不誤報 audit_write_failed）。
+
+    執行順序：started → 安全 run ID → eligible facts → 頂層型別驗證 →
+    network policy → context decision → plan preflight → 合併 final
+    decision → blocked（v3）或 safe plan → 委派 B1 engine → 最終 v3。
+    """
+    from dataclasses import replace
+
+    from alkaid_cs2.evaluation.authorization_context import (
+        AuthorizationDecision,
+        AuthorizationExecutionInputV1,
+        evaluate_execution_authorization,
+    )
+    from alkaid_cs2.evaluation.analyzer_audit import (
+        AnalyzerAuditWriteError,
+        validate_audit_manifest, write_audit_manifest,
+    )
+
+    started = _now_utc()
+    trace_run_id, run_id_valid = _safe_plan_run_id(plan)
+    facts = collect_safe_eligible_facts(eligible_cases)
+    safe_counts = facts if facts.valid else SafeEligibleFacts(
+        valid=False, case_count=0, image_count=0, image_hashes=())
+
+    # 頂層型別驗證（B0.2：任何屬性存取前）
+    top_errors: list[str] = []
+    if not isinstance(plan, ExternalAnalyzerExecutionPlan):
+        top_errors.append("execution_plan_invalid")
+    if not isinstance(authorization_input, AuthorizationExecutionInputV1):
+        top_errors.append("authorization_execution_input_invalid")
+    if not facts.valid:
+        top_errors.extend(facts.fixed_error_codes)
+
+    if top_errors:
+        # malformed 頂層輸入 → blocked（safe facts 欄位；不信任 invalid plan）
+        final_errors = list(dict.fromkeys(top_errors))
+        summary = ExternalAnalyzerExecutionSummary(
+            run_id=trace_run_id, planned_image_count=safe_counts.image_count,
+            processed_image_count=0, attempted_image_count=0,
+            succeeded_image_count=0, failed_image_count=0,
+            cache_hit_count=0, cache_miss_count=0, cache_invalid_count=0,
+            cache_write_count=0,
+            fixed_error_codes=final_errors, status="blocked")
+        try:
+            _write_blocked_v3_audit(
+                run_id=trace_run_id, started=started,
+                summary=summary, analyzer_name=analyzer_name,
+                analyzer_version=analyzer_version,
+                audit_dir=audit_dir, safe_counts=safe_counts)
+        except (AnalyzerAuditWriteError, ValueError):
+            summary = ExternalAnalyzerExecutionSummary(
+                run_id=trace_run_id, planned_image_count=safe_counts.image_count,
+                processed_image_count=0, attempted_image_count=0,
+                succeeded_image_count=0, failed_image_count=0,
+                cache_hit_count=0, cache_miss_count=0, cache_invalid_count=0,
+                cache_write_count=0,
+                fixed_error_codes=list(dict.fromkeys(
+                    final_errors + ["audit_write_failed"])),
+                status="blocked")
+        return summary
+
+    # 3-4. network policy + context decision
+    decision = evaluate_execution_authorization(
+        authorization_input=authorization_input,
+        plan_run_id=plan.run_id,
+        eligible_case_count=facts.case_count,
+        eligible_image_count=facts.image_count)
+    # 5. plan structural preflight
+    plan_errors = validate_authorized_execution_plan(
+        plan=plan, eligible_cases=eligible_cases,
+        authorization_input=authorization_input,
+        analyzer_name=analyzer_name)
+    # 6. 合併 final decision
+    final_errors = list(dict.fromkeys(
+        list(decision.fixed_error_codes) + plan_errors))
+    final_authorized = decision.authorized and not plan_errors \
+        and run_id_valid
+    final_decision = AuthorizationDecision(
+        authorization_flag_present=decision.authorization_flag_present,
+        authorization_env_present=decision.authorization_env_present,
+        authorization_env_accepted=decision.authorization_env_accepted,
+        authorization_context_present=decision.authorization_context_present,
+        authorization_context_valid=decision.authorization_context_valid,
+        authorized=final_authorized,
+        authorization_context_digest=decision.authorization_context_digest,
+        fixed_error_codes=tuple(final_errors),
+    )
+
+    def _write_v3_audit(summary: ExternalAnalyzerExecutionSummary) -> None:
+        audit = _build_v3_audit(
+            run_id=trace_run_id, started=started, plan=plan,
+            decision=final_decision,
+            authorization_input=authorization_input,
+            summary=summary, analyzer_name=analyzer_name,
+            analyzer_version=analyzer_version, safe_counts=facts)
+        errs = validate_audit_manifest(audit)
+        if errs:
+            raise ValueError(f"audit_v3_validation_failed:{errs[0]}")
+        write_audit_manifest(audit, Path(audit_dir) / "v3" / trace_run_id)
+
+    def _blocked_summary(codes: list[str]) -> ExternalAnalyzerExecutionSummary:
+        return ExternalAnalyzerExecutionSummary(
+            run_id=trace_run_id, planned_image_count=facts.image_count,
+            processed_image_count=0, attempted_image_count=0,
+            succeeded_image_count=0, failed_image_count=0,
+            cache_hit_count=0, cache_miss_count=0, cache_invalid_count=0,
+            cache_write_count=0,
+            fixed_error_codes=list(dict.fromkeys(codes)),
+            status="blocked")
+
+    if not final_authorized:
+        summary = _blocked_summary(final_errors)
+        try:
+            _write_v3_audit(summary)
+        except (AnalyzerAuditWriteError, ValueError):
+            summary = _blocked_summary(
+                list(dict.fromkeys(final_errors + ["audit_write_failed"])))
+        return summary
+
+    # 8. 內部 safe plan（不修改 caller 原始 plan）
+    execution_plan = replace(
+        plan, authorized=True, status="planned", dry_run=False)
+    # 9. 委派 B1 engine（fake loader/adapter；v2 audit 由 engine 寫）
+    summary = execute_external_analyzer_plan(
+        plan=execution_plan, eligible_cases=eligible_cases, loader=loader,
+        adapter=adapter, cache_dir=cache_dir, audit_dir=audit_dir,
+        allowed_root=allowed_root, analyzer_name=analyzer_name,
+        analyzer_version=analyzer_version)
+    # 10. 最終 Audit v3；失敗 → 降級 + audit_write_failed（不刪 cache）
+    try:
+        _write_v3_audit(summary)
+    except (AnalyzerAuditWriteError, ValueError):
+        codes = list(dict.fromkeys(
+            list(summary.fixed_error_codes) + ["audit_write_failed"]))
+        if summary.status == "completed":
+            summary.status = "completed_with_failures"
+        summary.fixed_error_codes = codes
+    return summary
+
+
+def _write_blocked_v3_audit(
+    *, run_id: str, started: str, summary: ExternalAnalyzerExecutionSummary,
+    analyzer_name: str, analyzer_version: str,
+    audit_dir: str | os.PathLike[str], safe_counts: SafeEligibleFacts,
+) -> None:
+    """頂層 malformed 的 blocked Audit v3（安全欄位來源，不信任 invalid plan）。"""
+    from alkaid_cs2.evaluation.analyzer_audit import (
+        AUDIT_SCHEMA_VERSION_V3,
+        validate_audit_manifest, write_audit_manifest,
+    )
+    audit = {
+        "schema_version": AUDIT_SCHEMA_VERSION_V3,
+        "run_id": run_id,
+        "started_at": started,
+        "completed_at": _now_utc(),
+        "dry_run": False,
+        "authorization_flag_present": False,
+        "authorization_env_present": False,
+        "authorization_env_accepted": False,
+        "authorization_context_present": False,
+        "authorization_context_valid": False,
+        "authorization_decision": False,
+        "authorization_context_digest": "",
+        "network_policy_version": "invalid-policy",
+        "eligible_case_count": safe_counts.case_count,
+        "eligible_image_count": safe_counts.image_count,
+        "processed_image_count": 0,
+        "attempted_image_count": 0,
+        "succeeded_image_count": 0,
+        "failed_image_count": 0,
+        "cache_hit_count": 0,
+        "cache_miss_count": 0,
+        "cache_invalid_count": 0,
+        "cache_write_count": 0,
+        "requested_network_call_count": 0,
+        "allowed_network_call_count": 0,
+        "result": "blocked",
+        "fixed_error_codes": list(summary.fixed_error_codes),
+        "image_hash_hashes": [],
+        "analyzer_name": analyzer_name,
+        "analyzer_version": analyzer_version,
+    }
+    errs = validate_audit_manifest(audit)
+    if errs:
+        raise ValueError(f"audit_v3_validation_failed:{errs[0]}")
+    write_audit_manifest(audit, Path(audit_dir) / "v3" / run_id)

@@ -20,6 +20,10 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass, fields
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from alkaid_cs2.evaluation.network_policy import NetworkPolicyV1
 
 # ---- 固定常數 ----
 AUTHORIZATION_SCHEMA_VERSION = "authorization-context-v1"
@@ -53,6 +57,11 @@ AUTHORIZATION_CONTEXT_ERROR_CODES = frozenset({
 })
 
 AUTHORIZATION_DECISION_ERROR_CODES = frozenset({
+    "authorization_requested_case_count_mismatch",
+    "authorization_requested_image_count_mismatch",
+    "authorization_expected_run_id_mismatch",
+    "authorization_execution_input_invalid",
+    "eligible_analyzer_cases_invalid",
     "authorization_flag_missing",
     "authorization_env_missing",
     "authorization_env_not_accepted",
@@ -441,4 +450,126 @@ def evaluate_authorization(
         authorized=authorized,
         authorization_context_digest=digest,
         fixed_error_codes=tuple(dict.fromkeys(all_errors)),
+    )
+
+
+# ================================================================
+# Phase 6.4C2-B2-B0 — Authorization wiring input + decision
+# ================================================================
+@dataclass(frozen=True)
+class AuthorizationExecutionInputV1:
+    """B2-B0 authorized wrapper 的正式授權輸入（immutable）。
+
+    規則：
+    - 不得包含 secret env value / API key / token / cookie / endpoint
+    - 不得包含 image bytes / 原始 case ID / storage reference
+    - 不從 global env 自動讀取 credentials
+    - expected_* 由 caller 明確提供（helper 內不執行 shell）
+    """
+
+    authorization_flag_present: bool
+    authorization_env_present: bool
+    authorization_env_accepted: bool
+    authorization_context: AuthorizationContextV1 | None
+    network_policy: "NetworkPolicyV1 | None"  # 型別在 evaluate 時驗證
+    expected_repository: str = ""
+    expected_branch: str = ""
+    expected_commit_sha: str = ""
+    expected_manifest_sha256: str = ""
+    expected_run_id: str = ""
+    expected_loader_name: str = ""
+    expected_loader_version: str = ""
+    expected_adapter_name: str = ""
+    expected_adapter_version: str = ""
+    expected_adapter_config_sha256: str = ""
+    expected_network_policy_version: str = ""
+    requested_case_count: int = 0
+    requested_image_count: int = 0
+    requested_network_calls: int = 0
+    requested_total_image_bytes: int = 0
+    requested_wall_time_seconds: int = 0
+    now_utc: str = ""
+
+
+def evaluate_execution_authorization(
+    *,
+    authorization_input: AuthorizationExecutionInputV1,
+    plan_run_id: str,
+    eligible_case_count: int,
+    eligible_image_count: int,
+) -> AuthorizationDecision:
+    """B2-B0 正式 preflight decision（純函式）。
+
+    固定流程（Phase 6.4C2-B2-B0）：
+    1. validate NetworkPolicyV1 + assert_network_disabled（deny-all 唯一合法）
+    2. evaluate AuthorizationContextV1（binding/budget/expiry）
+    3. 驗證 requested counts 與實際 plan/eligible cases 相符
+    4. 最終 decision：任何錯誤 → authorized=False
+    """
+    from alkaid_cs2.evaluation.network_policy import (
+        assert_network_disabled,
+        validate_network_policy,
+    )
+    errors: list[str] = []
+    np = authorization_input.network_policy
+    np_errors = validate_network_policy(np)
+    if np_errors:
+        errors.extend(e for e in np_errors
+                      if e != "network_policy_invalid")
+    disable_errors = assert_network_disabled(np)
+    errors.extend(disable_errors)
+
+    # requested counts 與實際一致
+    if authorization_input.requested_case_count != eligible_case_count:
+        errors.append("authorization_requested_case_count_mismatch")
+    if authorization_input.requested_image_count != eligible_image_count:
+        errors.append("authorization_requested_image_count_mismatch")
+
+    # expected_run_id 雙重 binding：input.expected_run_id == 實際 plan.run_id
+    if authorization_input.expected_run_id != plan_run_id:
+        errors.append("authorization_expected_run_id_mismatch")
+
+    decision = evaluate_authorization(
+        authorization_flag_present=(
+            authorization_input.authorization_flag_present),
+        authorization_env_present=(
+            authorization_input.authorization_env_present),
+        authorization_env_accepted=(
+            authorization_input.authorization_env_accepted),
+        authorization_context=authorization_input.authorization_context,
+        expected_repository=authorization_input.expected_repository,
+        expected_branch=authorization_input.expected_branch,
+        expected_commit_sha=authorization_input.expected_commit_sha,
+        expected_manifest_sha256=(
+            authorization_input.expected_manifest_sha256),
+        expected_run_id=plan_run_id,
+        expected_loader_name=authorization_input.expected_loader_name,
+        expected_loader_version=authorization_input.expected_loader_version,
+        expected_adapter_name=authorization_input.expected_adapter_name,
+        expected_adapter_version=authorization_input.expected_adapter_version,
+        expected_adapter_config_sha256=(
+            authorization_input.expected_adapter_config_sha256),
+        expected_network_policy_version=(
+            authorization_input.expected_network_policy_version),
+        requested_case_count=authorization_input.requested_case_count,
+        requested_image_count=authorization_input.requested_image_count,
+        requested_network_calls=(
+            authorization_input.requested_network_calls),
+        requested_total_image_bytes=(
+            authorization_input.requested_total_image_bytes),
+        requested_wall_time_seconds=(
+            authorization_input.requested_wall_time_seconds),
+        now_utc=authorization_input.now_utc,
+    )
+    all_errors = list(dict.fromkeys(list(decision.fixed_error_codes) + errors))
+    authorized = decision.authorized and not errors
+    return AuthorizationDecision(
+        authorization_flag_present=decision.authorization_flag_present,
+        authorization_env_present=decision.authorization_env_present,
+        authorization_env_accepted=decision.authorization_env_accepted,
+        authorization_context_present=decision.authorization_context_present,
+        authorization_context_valid=decision.authorization_context_valid,
+        authorized=authorized,
+        authorization_context_digest=decision.authorization_context_digest,
+        fixed_error_codes=tuple(all_errors),
     )
