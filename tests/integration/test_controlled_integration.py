@@ -58,7 +58,8 @@ def test_process_posts_off_mode_legacy_unchanged(env):
         return dict(LEGACY_OK)
 
     env.setattr(aa, "extract_skin_info", spy)
-    post = make_post("售 AK-47 | 红线 久经沙场 5000")
+    # Phase P1.1：裸數字無幣別 → UNKNOWN fail-closed；明確 TWD 才進 lookup
+    post = make_post("售 AK-47 | 红线 久经沙场 5000", currency="TWD")
     deals = aa.process_posts([post])
     assert spy_calls == ["售 AK-47 | 红线 久经沙场 5000"]
     assert post["_seller_price"] == 1000
@@ -88,7 +89,8 @@ def test_process_posts_safe_mode_fallback(env):
         return dict(LEGACY_OK)
 
     env.setattr(aa, "extract_skin_info", spy)
-    post = make_post("紅線 火神 14000 7480")  # 多商品 → V2 blocked
+    # Phase P1.1：fallback legacy 亦須明確幣別（TWD）才進 lookup
+    post = make_post("紅線 火神 14000 7480", currency="TWD")  # 多商品 → V2 blocked
     aa.process_posts([post])
     assert spy_calls, "V2 blocked 應 fallback legacy"
     assert post["_seller_price"] == 1000

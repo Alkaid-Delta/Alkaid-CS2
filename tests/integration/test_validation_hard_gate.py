@@ -243,7 +243,7 @@ _UNVERIFIED = {"market_hash_name": "神秘皮膚", "seller_price": 5000,
 _VERIFIED = {"market_hash_name": "AK-47 | Redline (Field-Tested)",
              "seller_price": 5000, "verified": True,
              "verified_by": "trusted_dictionary_exact",
-             "confidence": "high"}
+             "confidence": "high", "currency": "TWD"}
 
 
 # 15. mode=off + validation fail → lookup=0

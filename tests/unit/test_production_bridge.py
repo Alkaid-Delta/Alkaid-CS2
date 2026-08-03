@@ -146,10 +146,12 @@ def test_safe_falls_back_for_no_price():
 
 
 def test_safe_falls_back_for_rmb():
+    """P1.2：V2 adapter 不再 block RMB——透傳原始（由 stage 換算）"""
     r = bridge(post_text="售 紅線 9500RMB", mode="safe")
-    # V2 blocked（RMB 不換算）→ fallback legacy（legacy 自己會處理）
-    assert r.source == "legacy"
-    assert any(w.startswith("v2_fallback") for w in r.warnings)
+    assert r.source == "v2"
+    assert r.data["currency"] == "RMB"
+    assert r.data["original_price"] == 9500
+    assert r.data["converted"] is None
 
 
 # ================================================================
@@ -249,14 +251,15 @@ def test_valid_seller_price_rejects_zero():
     assert is_valid_legacy_seller_price(-1) is False
 
 
-def test_valid_seller_price_accepts_positive_number():
-    assert is_valid_legacy_seller_price(5000) is True
-    assert is_valid_legacy_seller_price(123.45) is True
+def test_valid_seller_price_accepts_int_decimal_rejects_float_bool():
+    """P1.3：int/Decimal 接受；float 拒絕（adapter 不產生 float）"""
+    from decimal import Decimal
+    assert is_valid_legacy_seller_price(123) is True
+    assert is_valid_legacy_seller_price(Decimal("123.45")) is True
+    assert is_valid_legacy_seller_price(123.45) is False  # float 拒收
+    assert is_valid_legacy_seller_price(0) is False
+    assert is_valid_legacy_seller_price(True) is False
 
-
-# ================================================================
-# 21. metrics
-# ================================================================
 def test_metrics_increment_correctly():
     m = ProductionParseMetrics()
     r1 = bridge(post_text="售 紅線 算5000", mode="safe")   # v2

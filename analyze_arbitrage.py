@@ -405,6 +405,229 @@ def _load_v2_dicts() -> tuple[dict, dict]:
 _LEGACY_VALIDATOR = None
 
 
+# Phase P1/P1.1：唯一換算邊界（config helper；rate 集中、可注入）
+from alkaid_cs2.services.currency import (
+    CurrencyService,
+    UnsupportedCurrencyError,
+    AlreadyConvertedError,
+    MoneyValidationError,
+)
+from alkaid_cs2.domain.price import (
+    Money,
+    ConvertedMoney,
+)
+from alkaid_cs2.domain.enums import Currency
+from decimal import Decimal as _Decimal, ROUND_HALF_UP as _ROUND_HALF_UP
+from dataclasses import dataclass
+
+
+def build_legacy_currency_service(
+    *,
+    rmb_to_twd=_Decimal("4.5"),
+    usd_to_rmb=_Decimal("7.2"),
+    rate_source="legacy-static-rate",
+) -> CurrencyService:
+    """P1.1：集中 rate config helper（測試可注入 fixture rate）。"""
+    return CurrencyService(
+        rmb_to_twd=rmb_to_twd,
+        usd_to_rmb=usd_to_rmb,
+        rate_source=rate_source,
+    )
+
+
+_CURRENCY_SERVICE = build_legacy_currency_service()
+
+
+@dataclass(frozen=True)
+class SellerAskConversionResult:
+    """P1.1：換算結果（成功/失敗不可誤判）。"""
+
+    original: Money | None
+    converted: ConvertedMoney | None
+    valid: bool
+    error_code: str | None
+
+
+def parse_original_amount(value: object) -> _Decimal:
+    """P1.1：嚴格原始金額輸入邊界（保留完整十進位精度）。
+
+    允許：Decimal / int（非 bool）/ 安全十進位字串（可含逗號）。
+    拒絕：float / bool / None / 空字串 / NaN / Infinity / 科學記號 /
+          含貨幣文字 / 負數 / 任意 object。
+    """
+    if isinstance(value, bool):
+        raise TypeError("金額不接受 bool")
+    if isinstance(value, float):
+        raise TypeError("金額不接受 float，請用 str/int（Decimal 精度）")
+    if isinstance(value, _Decimal):
+        dec = value
+    elif isinstance(value, int):
+        dec = _Decimal(value)
+    elif isinstance(value, str):
+        cleaned = value.strip().replace(",", "")
+        if not cleaned:
+            raise ValueError("金額字串不得為空")
+        if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)?", cleaned):
+            raise ValueError("金額字串格式不合法")
+        dec = _Decimal(cleaned)
+    else:
+        raise TypeError(
+            f"金額不支援的型別: {type(value).__name__}")
+    if dec.is_nan() or dec.is_infinite():
+        raise ValueError("金額不得為 NaN/Infinity")
+    if dec < 0:
+        raise ValueError("金額不得為負數")
+    return dec
+
+
+def quantize_twd_for_legacy_display(converted: ConvertedMoney) -> int:
+    """P1.1：legacy display 量化（ROUND_HALF_UP）——僅顯示層。"""
+    return int(converted.twd_amount.to_integral_value(
+        rounding=_ROUND_HALF_UP))
+
+
+def _detect_currency(info: dict, post: dict) -> Currency:
+    """幣別判定（P1）：優先 info.currency（LLM/結構化），再 post.currency。
+
+    明確標記：TWD/NT$/台幣；RMB/CNY/人民幣/¥；USD/美元。
+    裸數字無標記 → UNKNOWN（不得猜測、不得默認 TWD）。
+    """
+    raw = str(info.get("currency") or post.get("currency") or "").strip().upper()
+    if raw in ("TWD", "NT$", "NTD", "台幣", "臺幣", "新台幣", "NT"):
+        return Currency.TWD
+    if raw in ("RMB", "CNY", "人民幣", "¥"):
+        return Currency.RMB
+    if raw in ("USD", "US$", "美元"):
+        return Currency.USD
+    return Currency.UNKNOWN
+
+
+def _expected_rate_for(currency: Currency,
+                        svc: CurrencyService) -> _Decimal | None:
+    """依 original.currency 計算 expected rate（UNKNOWN → None）。"""
+    if currency is Currency.TWD:
+        return _Decimal("1")
+    if currency is Currency.RMB:
+        return svc.rmb_to_twd
+    if currency is Currency.USD:
+        return svc.usd_to_rmb * svc.rmb_to_twd
+    return None
+
+
+def validate_preconverted_money(
+    *,
+    converted: object,
+    currency_service: CurrencyService,
+    expected_original: Money | None,
+) -> SellerAskConversionResult | None:
+    """P1.2：ConvertedMoney 完整一致性驗證（rate/amount/source/original）。
+
+    通過 → None（可繼續使用）；失敗 → SellerAskConversionResult(valid=False)
+    固定錯誤碼。不得接受 subclass（exact-type）。
+    """
+    if type(converted) is not ConvertedMoney:
+        return SellerAskConversionResult(
+            None, None, False, "currency_preconverted_type_invalid")
+    cm = converted
+    if type(cm.original) is not Money:
+        return SellerAskConversionResult(
+            None, None, False, "currency_preconverted_original_mismatch")
+    if expected_original is not None and cm.original != expected_original:
+        return SellerAskConversionResult(
+            None, None, False, "currency_preconverted_original_mismatch")
+    expected_rate = _expected_rate_for(cm.original.currency, currency_service)
+    if expected_rate is None:
+        return SellerAskConversionResult(
+            None, None, False, "currency_preconverted_unknown_currency")
+    if cm.rate_used != expected_rate:
+        return SellerAskConversionResult(
+            None, None, False, "currency_preconverted_rate_mismatch")
+    expected_amount = cm.original.amount * expected_rate
+    if cm.twd_amount != expected_amount:
+        return SellerAskConversionResult(
+            None, None, False, "currency_preconverted_amount_mismatch")
+    if cm.rate_source != currency_service.rate_source:
+        return SellerAskConversionResult(
+            None, None, False, "currency_preconverted_source_mismatch")
+    return None
+
+
+def resolve_seller_ask_conversion(
+    data: dict,
+    post: dict,
+    currency_service: CurrencyService | None = None,
+) -> SellerAskConversionResult:
+    """P1.1：唯一共用換算 stage（mode=off / legacy / shadow / safe / v2 / vision）。
+
+    輸入 data 可含：
+    - converted（已合法 ConvertedMoney）→ 直接使用，不再換算
+    - original_price/seller_price + currency → 由 CurrencyService 換算一次
+    - 兩者皆有 → 驗證一致性（converted.original == original）
+
+    UNKNOWN / 無 currency → fail-closed（price_currency_unresolved）。
+    """
+    svc = currency_service or _CURRENCY_SERVICE
+
+    # P1.2 輸入優先順序：
+    # 1. typed original: Money → 2. original_price + currency → 3. legacy seller_price
+    typed_original = data.get("original")
+    money: Money | None = None
+    if type(typed_original) is Money:
+        money = typed_original
+        # typed 與 legacy 欄位一致檢查（矛盾 fail-closed）
+        raw_legacy = data.get("original_price", data.get("seller_price"))
+        if raw_legacy is not None:
+            try:
+                if parse_original_amount(raw_legacy) != money.amount:
+                    return SellerAskConversionResult(
+                        None, None, False, "currency_original_field_mismatch")
+            except (TypeError, ValueError):
+                return SellerAskConversionResult(
+                    None, None, False, "currency_original_field_mismatch")
+        cur_str = data.get("currency")
+        if cur_str is not None and                 str(cur_str).upper() != money.currency.value:
+            return SellerAskConversionResult(
+                None, None, False, "currency_original_field_mismatch")
+    else:
+        raw = data.get("original_price", data.get("seller_price", None))
+        try:
+            amount = parse_original_amount(raw)
+        except (TypeError, ValueError):
+            return SellerAskConversionResult(
+                None, None, False, "price_invalid_amount")
+        currency = _detect_currency(data, post)
+        if currency is Currency.UNKNOWN:
+            # P1.1：fail-closed——不得默認 TWD、不得原值繼續
+            return SellerAskConversionResult(
+                None, None, False, "price_currency_unresolved")
+        try:
+            money = Money(amount, currency)
+        except (TypeError, ValueError):
+            return SellerAskConversionResult(
+                None, None, False, "price_invalid_amount")
+
+    # 已換算結果（V2 提供 ConvertedMoney）——先一致性驗證再使用
+    converted_in = data.get("converted")
+    if converted_in is not None:
+        bad = validate_preconverted_money(
+            converted=converted_in,
+            currency_service=svc,
+            expected_original=money,
+        )
+        if bad is not None:
+            return bad
+        return SellerAskConversionResult(
+            converted_in.original, converted_in, True, None)
+
+    try:
+        converted = svc.to_twd(money)
+    except (UnsupportedCurrencyError, MoneyValidationError):
+        return SellerAskConversionResult(
+            None, None, False, "currency_unknown")
+    return SellerAskConversionResult(
+        money, converted, True, None)
+
+
 def _get_legacy_validator():
     """延遲初始化 ItemValidator（每 candidate 不重讀 catalog）。"""
     global _LEGACY_VALIDATOR
@@ -676,11 +899,13 @@ def extract_skin_info(post_text: str) -> dict | None:
 === 請提取 ===
 1. market_hash_name:CS2 皮膚完整英文名稱(含磨損),如 "★ Driver Gloves | King Snake (Field-Tested)"
    如果不是 CS2 皮膚買賣請回傳 "NONE".
-2. seller_price:賣家開價(新台幣 TWD),無價格請回 -1
-   **如果貼文價格是人民幣(RMB/¥),請自動乘 4.5 轉成 TWD**
-3. confidence:信心程度(high / medium / low)
+2. price:賣家開價的**原始數字**,如 2100（不要換算、不要乘匯率）,無價格請回 -1
+3. currency:原始幣別,只可為 TWD / RMB / USD / UNKNOWN
+   **嚴禁任何匯率換算**——不要乘 4.5、不要換算成台幣、不要更改幣別,
+   貼文寫多少就回多少;無法判斷幣別回 UNKNOWN
+4. confidence:信心程度(high / medium / low)
 
-只回傳 JSON:{{"market_hash_name":"...","seller_price":0,"confidence":"high"}}"""
+只回傳 JSON:{{"market_hash_name":"...","price":2100,"currency":"RMB","confidence":"high"}}"""
     # Phase P2.4：初次 LLM 呼叫（transport + parse 邊界在 helper 內）
     data = _call_legacy_llm_json(client, prompt=prompt, temperature=0.1)
     if data is None:
@@ -695,6 +920,14 @@ def extract_skin_info(post_text: str) -> dict | None:
         }
     if data.get("market_hash_name") == "NONE":
         return None
+
+    # Phase P1：LLM 只回傳原始 price + 原始 currency（不得換算）；
+    # seller_price 欄位保留為 original amount 語意（legacy 相容）
+    _price_raw = data.get("price", data.get("seller_price", -1))
+    data["seller_price"] = _price_raw
+    data["original_price"] = _price_raw
+    data["currency"] = data.get("currency", "UNKNOWN")
+    data.pop("price", None)
 
     # 自動驗證皮膚名稱是否存在於 csgoskins.gg（transport try 外）
     mhn = data.get("market_hash_name", "")
@@ -1104,9 +1337,14 @@ def process_posts(posts: list[dict]) -> list[dict]:
                 processed_ids.append(post.get("id", ""))
                 continue
             mh, sp, conf = info.get("market_hash_name", ""), info.get("seller_price", -1), info.get("confidence", "low")
-            # 圖片來源的 RMB 價格 → 轉成 TWD（×4.5）
-            if sp > 0 and post.get("currency") == "RMB":
-                sp = round(sp * 4.5)
+            # Phase P1.1：共用換算 stage（UNKNOWN → fail-closed）
+            conv = resolve_seller_ask_conversion(info, post)
+            if not conv.valid:
+                print(f"  [1/3] ⛔ 換算失敗 "
+                      f"({conv.error_code}), skip")
+                processed_ids.append(post.get("id", ""))
+                continue
+            sp = quantize_twd_for_legacy_display(conv.converted)
             if sp <= 0:
                 print("  [1/3] ⚠️ 無價格,跳過")
                 processed_ids.append(post.get("id", ""))
@@ -1147,13 +1385,14 @@ def process_posts(posts: list[dict]) -> list[dict]:
             mh = data.get("market_hash_name", "")
             sp = data.get("seller_price", -1)
             conf = data.get("confidence", "low")
-            if result.source == "v2":
-                # V2 已保證 TWD（adapter 只輸出 TWD），不得再次 ×4.5
-                pass
-            else:
-                # legacy / shadow_legacy：保留原 RMB 轉換行為
-                if is_valid_legacy_seller_price(sp) and post.get("currency") == "RMB":
-                    sp = round(sp * 4.5)
+            # Phase P1.1：V2/legacy/shadow/safe/vision 共用同一換算 stage
+            conv = resolve_seller_ask_conversion(data, post)
+            if not conv.valid:
+                print(f"  [1/3] ⛔ 換算失敗 "
+                      f"({conv.error_code}), skip")
+                processed_ids.append(post.get("id", ""))
+                continue
+            sp = quantize_twd_for_legacy_display(conv.converted)
             if not is_valid_legacy_seller_price(sp):
                 print("  [1/3] ⚠️ 無有效價格,跳過")
                 processed_ids.append(post.get("id", ""))

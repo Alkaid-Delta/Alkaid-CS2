@@ -16,9 +16,27 @@ from alkaid_cs2.domain.enums import Currency
 from alkaid_cs2.domain.price import ConvertedMoney, Money
 
 
+class MoneyValidationError(ValueError):
+    """Money 建構/驗證失敗。"""
+
+
+class UnsupportedCurrencyError(ValueError):
+    """UNKNOWN 或未支援幣別無法換算。"""
+
+
+class AlreadyConvertedError(TypeError):
+    """ConvertedMoney 不得再次傳入 to_twd。"""
+
+
+class InvalidRateConfigurationError(ValueError):
+    """匯率設定無效。"""
+
+
 def _coerce_rate(value) -> Decimal:
     if isinstance(value, Decimal):
         return value
+    if isinstance(value, bool):
+        raise TypeError("匯率不接受 bool")
     if isinstance(value, float):
         raise TypeError("匯率不接受 float，請用 str/int（Decimal 精度）")
     if isinstance(value, int):
@@ -38,19 +56,27 @@ class CurrencyService:
     ) -> None:
         self.rmb_to_twd = _coerce_rate(rmb_to_twd)
         self.usd_to_rmb = _coerce_rate(usd_to_rmb)
-        if self.rmb_to_twd <= 0:
-            raise ValueError("rmb_to_twd 必須為正數")
-        if self.usd_to_rmb <= 0:
-            raise ValueError("usd_to_rmb 必須為正數")
+        for label, rate in (("rmb_to_twd", self.rmb_to_twd),
+                            ("usd_to_rmb", self.usd_to_rmb)):
+            if rate.is_nan() or rate.is_infinite():
+                raise InvalidRateConfigurationError(f"{label} 不得為 NaN/Infinity")
+            if rate <= 0:
+                raise InvalidRateConfigurationError(f"{label} 必須為正數")
+        if not isinstance(rate_source, str) or not rate_source.strip():
+            raise InvalidRateConfigurationError("rate_source 必須為非空字串")
+        if len(rate_source) > 128 or not all(
+                c.isalnum() or c in "-_." for c in rate_source):
+            raise InvalidRateConfigurationError("rate_source 格式不合法")
         self.rate_source = rate_source
 
     def to_twd(self, money: Money) -> ConvertedMoney:
         """換算 Money 為 TWD，回傳 ConvertedMoney。輸入只接受 Money。"""
-        if not isinstance(money, Money):
-            raise TypeError(
-                f"to_twd 只接受 Money，收到 {type(money).__name__}"
-                "（ConvertedMoney 不可再次換算）"
-            )
+        if type(money) is not Money:
+            if isinstance(money, ConvertedMoney):
+                raise AlreadyConvertedError(
+                    "ConvertedMoney 不可再次換算（請直接使用 twd_amount）")
+            raise MoneyValidationError(
+                f"to_twd 只接受 Money，收到 {type(money).__name__}")
 
         if money.currency is Currency.TWD:
             rate_used = Decimal("1")
@@ -62,7 +88,8 @@ class CurrencyService:
             rate_used = self.usd_to_rmb * self.rmb_to_twd
             twd_amount = money.amount * rate_used
         else:  # UNKNOWN
-            raise ValueError(f"Unsupported currency: {money.currency}")
+            raise UnsupportedCurrencyError(
+                f"不支援的幣別: {money.currency.value}")
 
         return ConvertedMoney(
             original=money,

@@ -51,8 +51,27 @@ class LegacyAdapterResult:
             if "seller_price" not in self.legacy_data:
                 raise ValueError("legacy_data 必須包含 seller_price")
             sp = self.legacy_data["seller_price"]
-            if isinstance(sp, bool) or (sp is not None and not isinstance(sp, (int, float))):
-                raise TypeError(f"seller_price 必須是 int/float/None，收到 {type(sp).__name__}")
+            if isinstance(sp, bool) or (sp is not None and not isinstance(sp, (int, Decimal))):
+                raise TypeError(f"seller_price 必須是 int/Decimal/None，收到 {type(sp).__name__}")
+            # Phase P1.2：typed original 一致性（不一致 fail-closed）
+            orig = self.legacy_data.get("original")
+            if orig is not None:
+                from alkaid_cs2.domain.price import Money
+                if type(orig) is not Money:
+                    raise TypeError("original 必須是 Money")
+                if self.legacy_data.get("original_price") is not None and \
+                        self.legacy_data["original_price"] != orig.amount:
+                    raise ValueError("original_price 與 original.amount 不一致")
+                if self.legacy_data.get("currency") is not None and \
+                        self.legacy_data["currency"] != orig.currency.value:
+                    raise ValueError("currency 與 original.currency 不一致")
+            conv = self.legacy_data.get("converted")
+            if conv is not None:
+                from alkaid_cs2.domain.price import ConvertedMoney
+                if type(conv) is not ConvertedMoney:
+                    raise TypeError("converted 必須是 ConvertedMoney")
+                if orig is not None and conv.original != orig:
+                    raise ValueError("converted.original 與 original 不一致")
             if "confidence" not in self.legacy_data:
                 raise ValueError("legacy_data 必須包含 confidence")
         if not self.blocked and self.legacy_data is None:
@@ -89,10 +108,14 @@ def _blocked(reason: LegacySelectionReason, warnings: list[str]) -> LegacyAdapte
     )
 
 
-def _to_legacy_amount(amount: Decimal) -> int | float:
+def _to_legacy_amount(amount: Decimal) -> Decimal | int:
+    """轉成 legacy seller_price 型別（Decimal|int，P1.2 不轉 float）。
+
+    domain/adapter 始終保留 Decimal；只有最終顯示層才量化。
+    """
     if amount == amount.to_integral_value():
         return int(amount)
-    return float(amount)
+    return amount
 
 
 def to_legacy_skin_info(parsed_post: ParsedPost) -> LegacyAdapterResult:
@@ -182,6 +205,11 @@ def to_legacy_skin_info(parsed_post: ParsedPost) -> LegacyAdapterResult:
     if not asks:
         legacy = {
             "market_hash_name": item.market_hash_name,
+            # Phase P1.3：無價格不虛構幣別
+            "currency": None,
+            "original": None,
+            "original_price": None,
+            "converted": None,
             "seller_price": None,
             "confidence": item.confidence,
             "source": "v2_adapter",
@@ -213,17 +241,18 @@ def to_legacy_skin_info(parsed_post: ParsedPost) -> LegacyAdapterResult:
     price = ask_prices[0]
     sel_price_idx = asks[0]
 
-    # ── 6. 貨幣（只有 TWD 可輸出；UNKNOWN 不得假設為 TWD）──
-    if price.money.currency is Currency.RMB or price.money.currency is Currency.USD:
-        return _blocked(LegacySelectionReason.UNRESOLVED,
-                        ["currency_conversion_required"])
-    if price.money.currency is Currency.UNKNOWN:
-        return _blocked(LegacySelectionReason.UNRESOLVED,
-                        ["currency_unknown"])
+    # ── 6. 貨幣（P1.2：adapter 不執行換算、不判斷幣別──
+    # 原始 Money/currency 完整透傳，由共用 conversion stage 統一處理：
+    # RMB/USD → CurrencyService 一次；UNKNOWN → stage fail-closed）──
 
     # ── 8. legacy_data 格式 ──
     legacy = {
         "market_hash_name": item.market_hash_name,
+        # Phase P1.2：完整透傳原始 Money／currency（adapter 不換算）
+        "original": price.money,
+        "original_price": price.money.amount,
+        "currency": price.money.currency.value,
+        "converted": price.converted,
         "seller_price": _to_legacy_amount(price.money.amount),
         "confidence": item.confidence,
         # Phase P2：透傳 verification metadata（嚴格 bool）

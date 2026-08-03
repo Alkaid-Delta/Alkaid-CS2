@@ -159,10 +159,13 @@ def test_bundle_total_blocked():
 # 8. RMB seller ask → blocked（不換算）
 # ================================================================
 def test_rmb_seller_price_blocked():
+    """P1.2：RMB 不再被 adapter blocked——透傳原始 Money，由 stage 換算"""
     r = run("售 紅線 9500RMB")
-    assert r.blocked is True
-    assert r.legacy_data is None
-    assert any("currency_conversion_required" in w for w in r.warnings)
+    assert r.blocked is False
+    assert r.legacy_data is not None
+    assert r.legacy_data["currency"] == "RMB"
+    assert r.legacy_data["original"].currency is Currency.RMB
+    assert r.legacy_data["converted"] is None  # adapter 不換算
 
 
 # ================================================================
@@ -338,11 +341,13 @@ def test_no_external_calls(monkeypatch):
 # 22. 不換算貨幣（RMB 直接 block，無 legacy_data）
 # ================================================================
 def test_no_currency_conversion():
+    """P1.2：adapter 不執行換算（原始 9500 RMB 原樣透傳，無 ×4.5）"""
     r = run("售 紅線 9500RMB")
-    assert r.blocked is True
-    assert r.legacy_data is None
-    # 9500 沒有被 ×4.5
-    assert any("currency_conversion_required" in w for w in r.warnings)
+    assert r.blocked is False
+    assert r.legacy_data is not None
+    # 9500 沒有被 ×4.5（原始金額保留）
+    assert r.legacy_data["original_price"] == 9500
+    assert r.legacy_data["converted"] is None
 
 
 # ================================================================
@@ -379,14 +384,15 @@ def test_ambiguous_reason_not_empty():
 # 26. UNKNOWN 貨幣不得假設為 TWD
 # ---------------------------------------------------------------
 def test_unknown_currency_not_assumed_twd():
+    """P1.2：UNKNOWN 透傳（不假設 TWD）；由共用 stage fail-closed"""
     item = make_item()
     item.linked_price_indexes = [0]
     price = make_price("5000", currency=Currency.UNKNOWN)
     p = make_parsed_post([item], [price])
     r = to_legacy_skin_info(p)
-    assert r.blocked is True
-    assert r.legacy_data is None
-    assert any("currency_unknown" in w for w in r.warnings)
+    assert r.blocked is False
+    assert r.legacy_data["currency"] == "UNKNOWN"
+    assert r.legacy_data["original"].currency is Currency.UNKNOWN
 
 
 # ---------------------------------------------------------------

@@ -164,14 +164,22 @@ _METRICS = ProductionParseMetrics()
 # seller_price 防守
 # ============================================================
 def is_valid_legacy_seller_price(value: object) -> bool:
-    """int/float、拒絕 bool、finite、> 0。"""
+    """int/Decimal（P1.3）、拒絕 bool/float、finite、> 0。
+
+    P1.2 起 adapter 輸出 Decimal（不轉 float）；本函式同步接受
+    Decimal 以維持 V2 safe 判定與 legacy 相容。
+    """
+    from decimal import Decimal as _D
     if isinstance(value, bool):
         return False
-    if not isinstance(value, (int, float)):
+    if isinstance(value, float):
         return False
-    if not math.isfinite(value):
+    if not isinstance(value, (int, _D)):
         return False
-    return value > 0
+    try:
+        return value > 0 and not (value != value)
+    except TypeError:
+        return False
 
 
 # ============================================================
