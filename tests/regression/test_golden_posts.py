@@ -116,8 +116,7 @@ def test_legacy_single_nocts():
 # ---------------------------------------------------------------
 # 3. 紅線 + 火神同文（已知缺陷：第一命中 return，只回一個）
 # ---------------------------------------------------------------
-@pytest.mark.xfail(reason="known_defect: first_match_return — 字典第一命中即 return，無法回多商品",
-                   strict=False)
+@pytest.mark.xfail(reason="known_defect: first_match_return — 字典第一命中即 return，無法回多商品", strict=True,)
 def test_redline_vulcan_simplified():
     fix = _get_fixture("redline_vulcan_simplified")
     result = _extract(fix)
@@ -135,8 +134,7 @@ def test_redline_vulcan_simplified():
 # 4. 紅線(繁體) + 火神同文（已知缺陷：繁中「紅線」字典 miss）
 #    斷言嚴格要求 Redline：實際 legacy 只會命中「火神」→ 標記缺陷
 # ---------------------------------------------------------------
-@pytest.mark.xfail(reason="known_defect: traditional_variant_missing — 紅線(繁)不在 pattern_cn_to_en，貼文只命中火神",
-                   strict=False)
+@pytest.mark.xfail(reason="known_defect: traditional_variant_missing — 紅線(繁)不在 pattern_cn_to_en，貼文只命中火神", strict=True,)
 def test_redline_vulcan_traditional():
     fix = _get_fixture("redline_vulcan_traditional")
     result = _extract(fix)
@@ -152,8 +150,7 @@ def test_redline_vulcan_traditional():
 # 5. 售價 + BUFF 底價共存（typed prices 期望，legacy 不支援 → XFAIL）
 #    期望: 2100 RMB=buff_floor, 9200 TWD=calculated, 5000 TWD=seller_ask
 # ---------------------------------------------------------------
-@pytest.mark.xfail(reason="known_defect: price_role_not_distinguished — legacy 無 typed price 支援",
-                   strict=False)
+@pytest.mark.xfail(reason="known_defect: price_role_not_distinguished — legacy 無 typed price 支援", strict=True,)
 def test_seller_ask_plus_buff_floor():
     fix = _get_fixture("seller_ask_plus_buff_floor")
     result = _extract(fix)
@@ -171,8 +168,7 @@ def test_seller_ask_plus_buff_floor():
 # ---------------------------------------------------------------
 # 6. RMB 價格（已知缺陷：字典命中路徑無 currency，當 TWD）
 # ---------------------------------------------------------------
-@pytest.mark.xfail(reason="known_defect: currency_lost_on_dict_hit — RMB 未被標記，未經 CurrencyService",
-                   strict=False)
+@pytest.mark.xfail(reason="known_defect: currency_lost_on_dict_hit — RMB 未被標記，未經 CurrencyService", strict=True,)
 def test_rmb_price_no_conversion_marker():
     fix = _get_fixture("rmb_price_no_conversion_marker")
     result = _extract(fix)
@@ -272,8 +268,7 @@ TESTED_FIXTURE_IDS = [
 # ---------------------------------------------------------------
 # 11. 求購文（收）— legacy 無 role 概念 → XFAIL
 # ---------------------------------------------------------------
-@pytest.mark.xfail(reason="known_defect: role_not_distinguished — legacy 無 ItemRole，求購文被當 selling",
-                   strict=False)
+@pytest.mark.xfail(reason="known_defect: role_not_distinguished — legacy 無 ItemRole，求購文被當 selling", strict=True,)
 def test_buying_post_nocts():
     fix = _get_fixture("buying_post_nocts")
     result = _extract(fix)
@@ -289,8 +284,7 @@ def test_buying_post_nocts():
 # ---------------------------------------------------------------
 # 12. 純交換文（換/貼）— 不得當 selling → XFAIL
 # ---------------------------------------------------------------
-@pytest.mark.xfail(reason="known_defect: role_not_distinguished — legacy 無 ItemRole，交換文被當 selling",
-                   strict=False)
+@pytest.mark.xfail(reason="known_defect: role_not_distinguished — legacy 無 ItemRole，交換文被當 selling", strict=True,)
 def test_trade_only_post():
     fix = _get_fixture("trade_only_post")
     result = _extract(fix)
@@ -314,3 +308,259 @@ def test_no_price_selling_post():
     assert parts["skin"] == exp["items"][0]["skin"]
     # 無價格 → seller_price 必須是 -1（legacy 表示）或 None
     assert result["seller_price"] < 0, f"seller_price={result['seller_price']}"
+
+
+# ================================================================
+# P0 新增案例（人工契約 + 已知缺陷標記）
+# ================================================================
+def _p0_extract(fid, verify_fn=None):
+    fix = _get_fixture(fid)
+    return extract_legacy(fix["text"], verify_fn=verify_fn)
+
+
+def _assert_ok_skin(result, exp):
+    assert result["status"] == exp["status"], f"status={result['status']}"
+    if exp["status"] == "ok":
+        mh = result["market_hash_name"] or ""
+        parts = parse_market_hash(mh)
+        assert parts["skin"] == exp["items"][0]["skin"], f"skin={parts['skin']}"
+        assert parts["wear"] == exp["items"][0]["wear"], f"wear={parts['wear']}"
+        assert result["seller_price"] == exp["items"][0]["seller_price"], \
+            f"seller_price={result['seller_price']}"
+        if exp["items"][0].get("stattrak"):
+            assert parts["stattrak"], f"stattrak={parts['stattrak']}"
+        if exp["items"][0].get("star"):
+            assert parts["star"], f"star={parts['star']}"
+    else:
+        assert result["market_hash_name"] is None
+
+
+@pytest.mark.xfail(reason="known_defect: legacy_first_match_return — legacy 字典第一命中即 return", strict=True,)
+def test_p0_two_items_diff_price():
+    result = _p0_extract("p0_two_items_diff_price")
+    _assert_ok_skin(result, EXPECTED["p0_two_items_diff_price"])
+
+
+@pytest.mark.xfail(reason="known_defect: legacy_first_match_return — legacy 只回第一商品", strict=True,)
+def test_p0_same_weapon_diff_skin():
+    result = _p0_extract("p0_same_weapon_diff_skin")
+    _assert_ok_skin(result, EXPECTED["p0_same_weapon_diff_skin"])
+
+
+def test_p0_bundle_total_price():
+    result = _p0_extract("p0_bundle_total_price")
+    _assert_ok_skin(result, EXPECTED["p0_bundle_total_price"])
+
+
+@pytest.mark.xfail(reason="known_defect: bare_number_selection_ambiguous — 多裸數字 legacy 取最後數字 200 非首個合理賣價 5000", strict=True,)
+def test_p0_unlinked_bare_numbers():
+    result = _p0_extract("p0_unlinked_bare_numbers")
+    _assert_ok_skin(result, EXPECTED["p0_unlinked_bare_numbers"])
+
+
+def test_p0_float_value_not_price():
+    result = _p0_extract("p0_float_value_not_price")
+    _assert_ok_skin(result, EXPECTED["p0_float_value_not_price"])
+
+
+def test_p0_pattern_no_weapon_unverified():
+    result = _p0_extract("p0_pattern_no_weapon_unverified")
+    _assert_ok_skin(result, EXPECTED["p0_pattern_no_weapon_unverified"])
+
+
+def test_p0_image_only_item():
+    result = _p0_extract("p0_image_only_item")
+    _assert_ok_skin(result, EXPECTED["p0_image_only_item"])
+
+
+def test_p0_text_image_conflict():
+    result = _p0_extract("p0_text_image_conflict")
+    _assert_ok_skin(result, EXPECTED["p0_text_image_conflict"])
+
+
+def test_p0_unknown_currency_fail_closed():
+    result = _p0_extract("p0_unknown_currency_fail_closed")
+    _assert_ok_skin(result, EXPECTED["p0_unknown_currency_fail_closed"])
+
+
+def test_p0_rmb_single_conversion():
+    result = _p0_extract("p0_rmb_single_conversion")
+    _assert_ok_skin(result, EXPECTED["p0_rmb_single_conversion"])
+
+
+def test_p0_usd_single_conversion():
+    result = _p0_extract("p0_usd_single_conversion")
+    _assert_ok_skin(result, EXPECTED["p0_usd_single_conversion"])
+
+
+def test_p0_decimal_precision():
+    """legacy 快照層：parser 取整數 2100（Decimal 精度契約由 P1 test_currency_hardening 斷言）"""
+    result = _p0_extract("p0_decimal_precision")
+    _assert_ok_skin(result, EXPECTED["p0_decimal_precision"])
+
+
+@pytest.mark.xfail(reason="known_defect: knife_tiger_tooth_dict_miss — legacy 字典缺虎牙(Tiger Tooth) 組裝 → unresolved", strict=True,)
+def test_p0_stat_trak_star_prefix():
+    result = _p0_extract("p0_stat_trak_star_prefix")
+    _assert_ok_skin(result, EXPECTED["p0_stat_trak_star_prefix"])
+
+
+@pytest.mark.xfail(reason="future_gate: model_router_not_implemented — P7 未實作", strict=True)
+def test_p0_p7_flash_default_preview():
+    result = _p0_extract("p0_p7_flash_default_preview")
+    _assert_ok_skin(result, EXPECTED["p0_p7_flash_default_preview"])
+    assert result.get("model_used") == "flash"
+
+
+@pytest.mark.xfail(reason="future_gate: arbitrage_boundary_not_hardened — P8 未完成（profit override 邊界未實作）", strict=True)
+def test_p0_p8_llm_profit_override_preview():
+    result = _p0_extract("p0_p8_llm_profit_override_preview")
+    _assert_ok_skin(result, EXPECTED["p0_p8_llm_profit_override_preview"])
+    # P8 契約：profit 不可被 LLM override——P8 未實作 → 此欄位必須不存在（fail → xfail 成立）
+    assert result.get("profit_overridable") is not None
+
+
+def test_p0_inventory_grid_market():
+    result = _p0_extract("p0_inventory_grid_market")
+    _assert_ok_skin(result, EXPECTED["p0_inventory_grid_market"])
+
+
+@pytest.mark.xfail(reason="known_defect: legacy_first_match_return — legacy 只回第一商品", strict=True,)
+def test_p0_three_items_price():
+    result = _p0_extract("p0_three_items_price")
+    _assert_ok_skin(result, EXPECTED["p0_three_items_price"])
+
+
+def test_p0_calc_expr_2100_mul44_9240():
+    """2100*4.4=9240：9240 為 TWD calculated，不得再乘（P1 契約）"""
+    result = _p0_extract("p0_calc_expr_2100_mul44_9240")
+    _assert_ok_skin(result, EXPECTED["p0_calc_expr_2100_mul44_9240"])
+
+
+def test_p0_wear_percentage_not_price():
+    result = _p0_extract("p0_wear_percentage_not_price")
+    _assert_ok_skin(result, EXPECTED["p0_wear_percentage_not_price"])
+
+
+def test_p0_twd_calculated_not_reconverted():
+    """TWD 已算好 9240 不得再乘匯率（P1 no-double-conversion）"""
+    result = _p0_extract("p0_twd_calculated_not_reconverted")
+    _assert_ok_skin(result, EXPECTED["p0_twd_calculated_not_reconverted"])
+
+
+def test_p0_duplicate_images_dedup():
+    result = _p0_extract("p0_duplicate_images_dedup")
+    _assert_ok_skin(result, EXPECTED["p0_duplicate_images_dedup"])
+
+
+def test_p0_mode_off_legacy():
+    """mode=off 案例（fixture 標記；mode 行為由 P2 test_validation_hard_gate 驗證）"""
+    result = _p0_extract("p0_mode_off_legacy")
+    _assert_ok_skin(result, EXPECTED["p0_mode_off_legacy"])
+
+
+def test_p0_mode_shadow():
+    result = _p0_extract("p0_mode_shadow")
+    _assert_ok_skin(result, EXPECTED["p0_mode_shadow"])
+
+
+def test_p0_mode_v2_only():
+    result = _p0_extract("p0_mode_v2_only")
+    _assert_ok_skin(result, EXPECTED["p0_mode_v2_only"])
+
+
+# ================================================================
+# P0.1 補齊 8 個 p2_* golden 測試（D 類：case 存在但測試漏跑）
+# ================================================================
+def test_p2_trusted_dict_exact():
+    """trusted dictionary exact：字典命中 → ok（無需 LLM）"""
+    result = _p0_extract("p2_trusted_dict_exact")
+    exp = EXPECTED["p2_trusted_dict_exact"]
+    assert result["status"] == exp["status"], f"status={result['status']}"
+    mh = result["market_hash_name"] or ""
+    parts = parse_market_hash(mh)
+    assert parts["skin"] == exp["items"][0]["skin"], f"skin={parts['skin']}"
+    assert result["seller_price"] == exp["items"][0]["seller_price"]
+
+
+def test_p2_alias_canonical():
+    """alias canonical：「沙鹰」alias → 東方之謎 → ok"""
+    result = _p0_extract("p2_alias_canonical")
+    exp = EXPECTED["p2_alias_canonical"]
+    assert result["status"] == exp["status"], f"status={result['status']}"
+    mh = result["market_hash_name"] or ""
+    parts = parse_market_hash(mh)
+    assert parts["skin"] == exp["items"][0]["skin"], f"skin={parts['skin']}"
+    assert result["seller_price"] == exp["items"][0]["seller_price"]
+
+
+def test_p2_unknown_model_item(monkeypatch):
+    """未知模型商品 → LLM 回傳 → validator 拒絕 → unresolved"""
+    fix = _get_fixture("p2_unknown_model_item")
+    fake = FakeClient([_fake_json("Unknown Model Skin", 5000, "low")])
+    monkeypatch.setattr(aa, "create_client", lambda: fake)
+    result = extract_legacy(fix["text"], verify_fn=_verify_fn_fail)
+    assert result["status"] == "unresolved"
+    assert result["market_hash_name"] is None
+
+
+def test_p2_retry_succeeds_contract_is_preserved():
+    """P2 sealed 契約保存（contract_only——只驗證 expected 契約，非 production 執行）。
+    runtime retry 行為由 P2 integration test node 驗證：
+    tests/integration/test_validation_hard_gate.py::test_item_validator_retry_*"""
+    exp = EXPECTED["p2_retry_succeeds"]
+    assert exp["status"] == "ok", f"P2 契約被改寫: {exp['status']}"
+    item = exp["items"][0]
+    assert item["skin"] == "Nocts"
+    assert item["wear"] == "Field-Tested"
+    assert item["seller_price"] == 5000
+
+
+def test_p2_retry_fails_twice(monkeypatch):
+    """retry 兩次失敗 → 不回傳第一次名稱 → unresolved"""
+    fix = _get_fixture("p2_retry_fails_twice")
+    fake = FakeClient([
+        _fake_json("Ghost Skin A", 5000, "low"),
+        _fake_json("Ghost Skin B", 5000, "low"),
+    ])
+    monkeypatch.setattr(aa, "create_client", lambda: fake)
+    result = extract_legacy(fix["text"], verify_fn=_verify_fn_fail)
+    assert result["status"] == "unresolved"
+    assert result["market_hash_name"] is None
+
+
+def test_p2_vision_only_unverified(monkeypatch):
+    """vision-only 未驗證 → unresolved"""
+    fix = _get_fixture("p2_vision_only_unverified")
+    fake = FakeClient([_fake_json("Vision Only Skin", 5000, "low")])
+    monkeypatch.setattr(aa, "create_client", lambda: fake)
+    result = extract_legacy(fix["text"], verify_fn=_verify_fn_fail)
+    assert result["status"] == "unresolved"
+    assert result["market_hash_name"] is None
+
+
+def test_p2_safe_fallback_attempted(monkeypatch):
+    """safe fallback：V2 未知 → legacy fallback → unresolved"""
+    fix = _get_fixture("p2_safe_fallback_attempted")
+    fake = FakeClient([_fake_json("Mystery Skin", 5000, "low")])
+    monkeypatch.setattr(aa, "create_client", lambda: fake)
+    result = extract_legacy(fix["text"], verify_fn=_verify_fn_fail)
+    assert result["status"] == "unresolved"
+    assert result["market_hash_name"] is None
+
+
+def test_p2_validator_unavailable(monkeypatch):
+    """validator 不可用 → fail-closed → unresolved"""
+    fix = _get_fixture("p2_validator_unavailable")
+    fake = FakeClient([_fake_json("Some Skin", 5000, "high")])
+    monkeypatch.setattr(aa, "create_client", lambda: fake)
+    result = extract_legacy(fix["text"], verify_fn=_verify_fn_fail)
+    assert result["status"] == "unresolved"
+    assert result["market_hash_name"] is None
+
+
+def test_p0_nocts_without_weapon_unresolved():
+    """夜行衣無武器 → unresolved（P2.2 收斂獨立案例——不得與 retry_succeeds 契約混淆）"""
+    result = _p0_extract("p0_nocts_without_weapon_unresolved")
+    assert result["status"] == "unresolved"
+    assert result["market_hash_name"] is None

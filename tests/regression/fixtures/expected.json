@@ -133,7 +133,8 @@
         "role": "selling",
         "seller_price": 27000,
         "currency": "TWD",
-        "weapon": "Karambit"
+        "weapon": "Karambit",
+        "star": true
       }
     ]
   },
@@ -227,6 +228,295 @@
     "market_hash_name": null
   },
   "p2_validator_unavailable": {
+    "status": "unresolved",
+    "items": [],
+    "market_hash_name": null
+  },
+  "p0_two_items_diff_price": {
+    "status": "ok",
+    "items": [
+      {
+        "skin": "Redline",
+        "wear": "Field-Tested",
+        "role": "selling",
+        "seller_price": 7480,
+        "currency": "TWD"
+      }
+    ]
+  },
+  "p0_same_weapon_diff_skin": {
+    "status": "ok",
+    "items": [
+      {
+        "skin": "Redline",
+        "wear": "Field-Tested",
+        "role": "selling",
+        "seller_price": 5000,
+        "currency": "TWD"
+      }
+    ]
+  },
+  "p0_bundle_total_price": {
+    "status": "ok",
+    "items": [
+      {
+        "skin": "Redline",
+        "wear": "Field-Tested",
+        "role": "selling",
+        "seller_price": 20000,
+        "currency": "TWD"
+      }
+    ]
+  },
+  "p0_unlinked_bare_numbers": {
+    "status": "ok",
+    "items": [
+      {
+        "skin": "Redline",
+        "wear": "Field-Tested",
+        "role": "selling",
+        "seller_price": 5000,
+        "currency": "TWD"
+      }
+    ]
+  },
+  "p0_float_value_not_price": {
+    "status": "ok",
+    "items": [
+      {
+        "skin": "Redline",
+        "wear": "Field-Tested",
+        "role": "selling",
+        "seller_price": 5000,
+        "currency": "TWD"
+      }
+    ]
+  },
+  "p0_pattern_no_weapon_unverified": {
+    "status": "unresolved",
+    "items": []
+  },
+  "p0_image_only_item": {
+    "status": "ok",
+    "items": [
+      {
+        "skin": "Redline",
+        "wear": "Field-Tested",
+        "role": "selling",
+        "seller_price": 5000,
+        "currency": "TWD"
+      }
+    ]
+  },
+  "p0_text_image_conflict": {
+    "status": "ok",
+    "items": [
+      {
+        "skin": "Redline",
+        "wear": "Field-Tested",
+        "role": "selling",
+        "seller_price": 5000,
+        "currency": "TWD"
+      }
+    ]
+  },
+  "p0_unknown_currency_fail_closed": {
+    "status": "ok",
+    "items": [
+      {
+        "skin": "Redline",
+        "wear": "Field-Tested",
+        "role": "selling",
+        "seller_price": 5000,
+        "currency": "TWD"
+      }
+    ]
+  },
+  "p0_rmb_single_conversion": {
+    "status": "ok",
+    "items": [
+      {
+        "skin": "Redline",
+        "wear": "Field-Tested",
+        "role": "selling",
+        "seller_price": 2100,
+        "currency": "RMB"
+      }
+    ]
+  },
+  "p0_usd_single_conversion": {
+    "status": "ok",
+    "items": [
+      {
+        "skin": "Redline",
+        "wear": "Field-Tested",
+        "role": "selling",
+        "seller_price": 100,
+        "currency": "USD"
+      }
+    ]
+  },
+  "p0_decimal_precision": {
+    "status": "ok",
+    "items": [
+      {
+        "skin": "Redline",
+        "wear": "Field-Tested",
+        "role": "selling",
+        "seller_price": 2100,
+        "currency": "TWD"
+      }
+    ]
+  },
+  "p0_stat_trak_star_prefix": {
+    "status": "ok",
+    "items": [
+      {
+        "skin": "Tiger Tooth",
+        "wear": "Factory New",
+        "role": "selling",
+        "seller_price": 5000,
+        "currency": "TWD",
+        "stattrak": true,
+        "star": true
+      }
+    ]
+  },
+  "p0_p7_flash_default_preview": {
+    "status": "ok",
+    "items": [
+      {
+        "skin": "Redline",
+        "wear": "Field-Tested",
+        "role": "selling",
+        "seller_price": 5000,
+        "currency": "TWD"
+      }
+    ],
+    "model_used": "flash"
+  },
+  "p0_p8_llm_profit_override_preview": {
+    "status": "ok",
+    "items": [
+      {
+        "skin": "Redline",
+        "wear": "Field-Tested",
+        "role": "selling",
+        "seller_price": 5000,
+        "currency": "TWD"
+      }
+    ],
+    "profit_not_overridable": true
+  },
+  "p0_inventory_grid_market": {
+    "status": "ok",
+    "items": [
+      {
+        "skin": "Redline",
+        "wear": "Field-Tested",
+        "role": "selling",
+        "seller_price": 5000,
+        "currency": "TWD"
+      }
+    ]
+  },
+  "p0_three_items_price": {
+    "status": "ok",
+    "items": [
+      {
+        "skin": "Redline",
+        "wear": "Field-Tested",
+        "role": "selling",
+        "seller_price": 5000,
+        "currency": "TWD"
+      }
+    ]
+  },
+  "p0_wear_percentage_not_price": {
+    "status": "ok",
+    "items": [
+      {
+        "skin": "Redline",
+        "wear": "Field-Tested",
+        "role": "selling",
+        "seller_price": 5000,
+        "currency": "TWD"
+      }
+    ]
+  },
+  "p0_twd_calculated_not_reconverted": {
+    "status": "ok",
+    "items": [
+      {
+        "skin": "Redline",
+        "wear": "Field-Tested",
+        "role": "selling",
+        "seller_price": 9240,
+        "currency": "TWD"
+      }
+    ]
+  },
+  "p0_duplicate_images_dedup": {
+    "status": "ok",
+    "items": [
+      {
+        "skin": "Redline",
+        "wear": "Field-Tested",
+        "role": "selling",
+        "seller_price": 5000,
+        "currency": "TWD"
+      }
+    ]
+  },
+  "p0_mode_off_legacy": {
+    "status": "ok",
+    "items": [
+      {
+        "skin": "Redline",
+        "wear": "Field-Tested",
+        "role": "selling",
+        "seller_price": 5000,
+        "currency": "TWD"
+      }
+    ]
+  },
+  "p0_mode_shadow": {
+    "status": "ok",
+    "items": [
+      {
+        "skin": "Redline",
+        "wear": "Field-Tested",
+        "role": "selling",
+        "seller_price": 5000,
+        "currency": "TWD"
+      }
+    ]
+  },
+  "p0_mode_v2_only": {
+    "status": "ok",
+    "items": [
+      {
+        "skin": "Redline",
+        "wear": "Field-Tested",
+        "role": "selling",
+        "seller_price": 5000,
+        "currency": "TWD"
+      }
+    ]
+  },
+  "p0_calc_expr_2100_mul44_9240": {
+    "status": "ok",
+    "items": [
+      {
+        "skin": "Redline",
+        "wear": "Field-Tested",
+        "role": "selling",
+        "seller_price": 9240,
+        "currency": "TWD"
+      }
+    ]
+  },
+  "p0_nocts_without_weapon_unresolved": {
     "status": "unresolved",
     "items": [],
     "market_hash_name": null
