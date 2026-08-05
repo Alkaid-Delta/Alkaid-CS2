@@ -258,7 +258,8 @@ def test_real_bridge_v2_rmb_9450(monkeypatch):
     assert data["currency"] == "RMB"
     assert data["original_price"] == Decimal("2100")
     assert calls["to_twd"] == 1, calls
-    assert post["_seller_price"] == 9450, post.get("_seller_price")
+    # E3 契約：structured path 不寫入原始 post（candidate TWD 9450 於 candidate_post copy）
+    assert post.get("_seller_price") is None, post.get("_seller_price")
     assert calls["lookup"] == 1, calls
 
 
@@ -266,7 +267,7 @@ def test_real_bridge_v2_usd_3240(monkeypatch):
     calls, post, result = _real_bridge_process(
         monkeypatch, "售 AK-47 | 红线 算100 USD", post_currency="USD")
     assert calls["to_twd"] == 1, calls
-    assert post["_seller_price"] == int(100 * 7.2 * 4.5), post.get("_seller_price")
+    assert post.get("_seller_price") is None, post.get("_seller_price")
 
 
 def test_real_bridge_v2_twd_5001(monkeypatch):

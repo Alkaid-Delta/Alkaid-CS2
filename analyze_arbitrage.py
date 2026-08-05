@@ -552,6 +552,135 @@ def validate_preconverted_money(
     return None
 
 
+# ============================================================
+# P6-R1-E1: structured market consumer（真正接管——每 candidate 個別分析）
+# ============================================================
+def process_structured_market_candidates(
+    candidates: list,
+    *,
+    post: dict,
+    currency_service=None,
+    lookup_func=None,
+    analysis_func=None,
+    upload_func=None,
+    upload_enabled: bool = False,
+) -> tuple[list, list]:
+    """每個 eligible structured candidate 個別 conversion → lookup → analysis → deal。
+
+    輸入：
+      candidates   — MarketCandidate list（由 build_market_candidates 產生）
+      post         — 原始貼文（currency detection 用）
+      lookup_func  — market lookup（production default = lookup_buff_price；測試可注入 fake）
+      analysis_func— analysis（production default = analyze_arbitrage；測試可注入 fake）
+      upload_func  — upload（production default = upload_to_cloud）
+
+    輸出：
+      (outcomes, deals)
+      outcomes — 每 candidate 的診斷 dict（mh/amount/currency/twd/lookup/blocked）
+      deals    — 成功的 analysis 結果
+
+    規則：
+      1. 每個 eligible candidate 個別 conversion（resolve_seller_ask_conversion——P1.1 唯一 stage）
+      2. 每個 eligible candidate 最多一次 lookup
+      3. lookup result 直接供該 candidate 的 analysis
+      4. 每成功 candidate 一筆 deal
+      5. 不執行 legacy lookup（structured path 啟用時）
+      6. 第一個 candidate 失敗不影響其他
+      7. seller ask TWD 傳入 analysis context
+      8. 不引入 P7 routing / 不修改 P8 profit 邊界
+    """
+    from alkaid_cs2.domain.market_candidate import eligible_candidates
+
+    outcomes: list[dict] = []
+    deals: list[dict] = []
+    lookup = lookup_func or lookup_buff_price
+    upload = upload_func or upload_to_cloud
+
+    for cand in eligible_candidates(candidates):
+        outcome: dict = {
+            "item_index": cand.item_index,
+            "market_hash_name": cand.market_hash_name,
+            "price_image_index": cand.price_image_index,
+            "associated_item_index": cand.associated_item_index,
+            "blocked": cand.blocked,
+            "block_reason": cand.block_reason,
+            "lookup_called": False,
+            "lookup_result": None,
+            "analysis_result": None,
+        }
+        if cand.blocked or not cand.verified or cand.original_money is None:
+            outcomes.append(outcome)
+            continue
+        # 個別 P1 conversion（原始 Money——P1.2 typed）
+        conv = resolve_seller_ask_conversion({"original": cand.original_money}, post,
+                                             currency_service=currency_service)
+        if not conv.valid:
+            outcome["blocked"] = True
+            outcome["block_reason"] = "P6_MARKET_CANDIDATE_CONVERSION_INVALID"
+            outcome["conversion_error"] = conv.error_code
+            outcomes.append(outcome)
+            continue
+        twd = conv.converted
+        outcome["converted_twd"] = twd
+        # lookup（每個 candidate 最多一次——結果綁定 candidate identity）
+        buff = lookup(cand.market_hash_name)
+        outcome["lookup_called"] = True
+        outcome["lookup_result"] = buff
+        if buff is None:
+            outcomes.append(outcome)
+            continue
+        # ── P6-R1-E2：candidate-specific analysis context（不污染共享 post）──
+        # 每個 candidate 用獨立 post copy：seller ask TWD + market identity 綁定
+        candidate_post = dict(post)
+        candidate_post["_seller_price"] = quantize_twd_for_legacy_display(twd)
+        candidate_post["_structured_market_hash_name"] = cand.market_hash_name
+        # 預設 analysis：analyze_arbitrage(candidate_post, buff)——使用 candidate context
+        if analysis_func is not None:
+            deal = analysis_func(cand.market_hash_name, buff, twd)
+        else:
+            deal = analyze_arbitrage(candidate_post, buff)
+        outcome["analysis_result"] = deal
+        outcomes.append(outcome)
+        if deal:
+            deals.append(deal)
+            if upload_enabled:
+                upload(deal)
+    return outcomes, deals
+
+
+def dispatch_structured_or_legacy(mode, result, post):
+    """P6-R1-E3：唯一 structured/legacy dispatch（每 post 呼叫一次）。
+
+    回傳 (dispatch, outcomes, s_deals)：
+      "structured" — structured consumer 已執行（caller 處理 report/history/processed_ids/continue）
+      "legacy"     — 走 legacy path（off/shadow/safe-no-eligible）
+      "fail_closed"— v2_only 無 eligible（caller skip——不 legacy fallback）
+    """
+    from alkaid_cs2.domain.market_candidate import eligible_candidates
+
+    if mode == "off":
+        return "legacy", [], []
+    sc = getattr(result, "structured_candidates", None) or []
+    eligible = eligible_candidates(sc)
+    if mode == "shadow":
+        # structured 僅 audit——正式 legacy（無 structured side effect）
+        return "legacy", [], []
+    if mode == "v2_only":
+        if not eligible:
+            # fail-closed：即使 legacy data 合法也不 fallback
+            return "fail_closed", [], []
+        outcomes, deals = process_structured_market_candidates(
+            sc, post=post, upload_enabled=True)
+        return "structured", outcomes, deals
+    # safe
+    if eligible:
+        outcomes, deals = process_structured_market_candidates(
+            sc, post=post, upload_enabled=True)
+        return "structured", outcomes, deals
+    # safe 無 eligible → 依既有 safe fallback 契約走 legacy
+    return "legacy", [], []
+
+
 def resolve_seller_ask_conversion(
     data: dict,
     post: dict,
@@ -1377,10 +1506,47 @@ def process_posts(posts: list[dict]) -> list[dict]:
                 mode=mode,
             )
             _METRICS.record(result)
-            if result.blocked or result.data is None:
+            # P6-R1-E4：blocked 優先 fail-closed；structured dispatch 不依賴 legacy data 存在
+            if result.blocked:
                 print(f"  [1/3] ⏭️ skipped ({result.source})")
                 processed_ids.append(post.get("id", ""))
                 continue
+
+            # ── P6-R1-E3: 唯一 structured/legacy dispatch ──
+            # structured consumer invocation 每 post 最多 1 次；
+            # v2_only 無 eligible → fail-closed；shadow → 正式 legacy（無 structured side effect）；
+            # structured path 不寫入原始 post（candidate_post copy 各自取得價格）。
+            dispatch, outcomes, s_deals = dispatch_structured_or_legacy(mode, result, post)
+            if dispatch == "fail_closed":
+                print("  [1/3] ⛔ v2_only fail-closed（無 eligible structured candidate）")
+                processed_ids.append(post.get("id", ""))
+                continue
+            if dispatch == "structured":
+                for oc in outcomes:
+                    if oc.get("blocked"):
+                        print(f"  [1/3] ⛔ [structured] blocked "
+                              f"({oc.get('block_reason')}) {oc.get('market_hash_name')}")
+                    elif oc.get("lookup_result") is None:
+                        print(f"  [2/3] ⚠️ [structured] 無此皮膚 "
+                              f"{oc.get('market_hash_name')}")
+                    else:
+                        _twd = oc.get("converted_twd")
+                        _amt = getattr(_twd, "twd_amount", _twd)
+                        print(f"  [2/3] ✅ [structured] "
+                              f"{oc.get('market_hash_name')} | NT${_amt:,.0f} | "
+                              f"img_idx={oc.get('price_image_index')}")
+                for deal in s_deals:
+                    deals.append(deal)
+                    print_deal_report(deal)
+                    save_deal_to_history(deal)
+                processed_ids.append(post.get("id", ""))
+                continue  # structured path 完成——不執行 legacy gates/lookup
+            # legacy（off/shadow/safe-no-eligible）——此時才要求 legacy data
+            if result.data is None:
+                print(f"  [1/3] ⏭️ skipped（legacy 無 data——{result.source}）")
+                processed_ids.append(post.get("id", ""))
+                continue
+
             data = result.data
             mh = data.get("market_hash_name", "")
             sp = data.get("seller_price", -1)

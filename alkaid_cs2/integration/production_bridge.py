@@ -22,6 +22,7 @@ from typing import Callable
 from alkaid_cs2.adapters.legacy_adapter import LegacyAdapterResult, parse_to_legacy
 from alkaid_cs2.domain.evidence_merge import ConflictType
 from alkaid_cs2.domain.parsed_post import ParseStatus
+from alkaid_cs2.domain.market_candidate import MarketCandidate, build_market_candidates
 from alkaid_cs2.domain.raw_post import RawPostInput
 from alkaid_cs2.integration.vision_production import (
     VisionImageInput,
@@ -55,6 +56,7 @@ class ProductionParseResult:
     warnings: list[str] = field(default_factory=list)
     shadow_diff: dict[str, object] | None = None
     vision_summary: dict[str, object] | None = None
+    structured_candidates: list[MarketCandidate] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if self.source not in ("legacy", "v2", "shadow_legacy", "skipped"):
@@ -78,6 +80,12 @@ class ProductionParseResult:
             self.shadow_diff = dict(self.shadow_diff)
         if self.vision_summary is not None:
             self.vision_summary = dict(self.vision_summary)
+        if not isinstance(self.structured_candidates, list):
+            raise TypeError("structured_candidates 必須是 list")
+        for c in self.structured_candidates:
+            if not isinstance(c, MarketCandidate):
+                raise TypeError("structured_candidates 每筆必須是 MarketCandidate")
+        self.structured_candidates = list(self.structured_candidates)
 
 
 @dataclass
@@ -505,6 +513,8 @@ def parse_post_for_production(
                 warnings=list(dict.fromkeys(["vision_merged"] + vp_warnings)),
                 vision_summary=_build_vision_summary(
                     vp, input_count=len(vision_inputs), used=True),
+                structured_candidates=build_market_candidates(vp.merged_post)
+                if vp.merged_post is not None else [],
             )
         # Vision 不安全 → 先試 text-only V2
         text_reasons = _v2_safe_reasons(v2_result) if v2_result is not None else ["v2_error"]
@@ -517,6 +527,8 @@ def parse_post_for_production(
                 vision_summary=_build_vision_summary(
                     vp, input_count=len(vision_inputs), used=False,
                     fallback_to_text=True),
+                structured_candidates=build_market_candidates(v2_result.parsed_post)
+                if v2_result.parsed_post is not None else [],
             )
         # 兩者都不安全
         if mode == "v2_only":
@@ -557,6 +569,8 @@ def parse_post_for_production(
         return ProductionParseResult(
             data=v2_result.legacy_data, source="v2", blocked=False,
             warnings=[], shadow_diff=None,
+            structured_candidates=build_market_candidates(v2_result.parsed_post)
+            if v2_result.parsed_post is not None else [],
         )
 
     if mode == "v2_only":

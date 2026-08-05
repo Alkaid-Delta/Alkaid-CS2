@@ -40,6 +40,7 @@ class LegacyAdapterResult:
     selection_reason: LegacySelectionReason
     warnings: list[str] = field(default_factory=list)
     blocked: bool = False
+    parsed_post: "ParsedPost | None" = None  # P6-R1-E2：text-only V2 structured path 保留
 
     def __post_init__(self) -> None:
         if self.legacy_data is not None:
@@ -228,6 +229,7 @@ def to_legacy_skin_info(parsed_post: ParsedPost) -> LegacyAdapterResult:
             selection_reason=sel_reason,
             warnings=list(dict.fromkeys(warnings)),
             blocked=False,
+            parsed_post=parsed_post,
         )
 
     ask_prices = [parsed_post.prices[j] for j in asks]
@@ -270,6 +272,7 @@ def to_legacy_skin_info(parsed_post: ParsedPost) -> LegacyAdapterResult:
         selection_reason=sel_reason,
         warnings=list(dict.fromkeys(warnings)),
         blocked=False,
+        parsed_post=parsed_post,
     )
 
 

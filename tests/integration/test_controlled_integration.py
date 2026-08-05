@@ -73,7 +73,8 @@ def test_process_posts_safe_mode_v2_single_item(env):
     env.setenv("ALKAID_V2_PARSER_MODE", "safe")
     post = make_post("售 AK-47 | 红线 久经沙场 算5000")
     deals = aa.process_posts([post])
-    assert post["_seller_price"] == 5000
+    # E3 契約：structured path 不寫入原始 post（candidate_post copy 各自取得價格）
+    assert "_seller_price" not in post, "structured path 不得污染原始 post"
     assert deals == []
 
 
@@ -136,8 +137,8 @@ def test_v2_result_not_multiplied_by_4_5(env):
     env.setenv("ALKAID_V2_PARSER_MODE", "safe")
     post = make_post("售 AK-47 | 红线 久经沙场 算5000", currency="RMB")
     aa.process_posts([post])
-    # V2 已保證 TWD → 不得 ×4.5（5000*4.5=22500）
-    assert post["_seller_price"] == 5000, f"_seller_price={post.get('_seller_price')}"
+    # E3 契約：structured path 不寫入原始 post——legacy ×4.5 值不得出現（22500）
+    assert post.get("_seller_price") is None, f"_seller_price={post.get('_seller_price')}（不得為 legacy ×4.5 值）"
 
 
 # ================================================================

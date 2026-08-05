@@ -250,7 +250,8 @@ def test_v2_result_not_multiplied(env, monkeypatch):
                                      "payload": SAFE_IMG}])
     monkeypatch.setattr(aa, "extract_skin_info", lambda t: dict(LEGACY_RMB))
     aa.process_posts([post])
-    assert post["_seller_price"] == 5000, "V2 結果不得 ×4.5"
+    # E3 契約：structured path 不寫入原始 post（V2 不 ×4.5 由 candidate context 保證）
+    assert post.get("_seller_price") is None, "structured path 不得污染原始 post"
 
 
 def test_legacy_fallback_keeps_conversion(env, monkeypatch):
